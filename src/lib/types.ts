@@ -40,7 +40,8 @@ export interface Entry {
   balance: number;
 }
 
-export type LedgerFilter = "all" | "wire" | "hand" | "untagged";
+export const LEDGER_FILTERS = ["all", "wire", "hand", "untagged"] as const;
+export type LedgerFilter = (typeof LEDGER_FILTERS)[number];
 
 export type RuleField = "sender" | "payee_prefix" | "amount_over";
 export type RuleAction = "file" | "tag" | "ask";

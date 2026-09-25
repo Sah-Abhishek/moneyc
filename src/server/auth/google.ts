@@ -117,6 +117,24 @@ export async function exchangeCode(cfg: Config, code: string, verifier: string, 
     { code, code_verifier: verifier, client_id: cfg.googleClientId, client_secret: cfg.googleClientSecret, redirect_uri: redirectUri(cfg), grant_type: "authorization_code" },
     fetchImpl,
   );
+  return toTokenSet(json, cfg);
+}
+
+/**
+ * The Android app's sign-in: Google gives the app a one-time "server auth
+ * code" for this (web) client, which only the server can redeem — so the Gmail
+ * refresh token never lives on the phone. Native codes carry no PKCE verifier
+ * and are redeemed with an empty redirect URI.
+ */
+export async function exchangeServerAuthCode(cfg: Config, code: string, fetchImpl: typeof fetch = fetch): Promise<TokenSet> {
+  const json = await postToken(
+    { code, client_id: cfg.googleClientId, client_secret: cfg.googleClientSecret, redirect_uri: "", grant_type: "authorization_code" },
+    fetchImpl,
+  );
+  return toTokenSet(json, cfg);
+}
+
+function toTokenSet(json: Record<string, unknown>, cfg: Config): TokenSet {
   return {
     accessToken: String(json.access_token),
     refreshToken: typeof json.refresh_token === "string" ? json.refresh_token : null,

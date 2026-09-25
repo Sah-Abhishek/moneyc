@@ -1,4 +1,5 @@
 import { daysBetween, wallClock } from "../../lib/dates.ts";
+import { rupees } from "../../lib/money.ts";
 import { all, insertId, one, run, withTx } from "../db/index.ts";
 import { ConflictError, NotFoundError, nowUtc, UserError, type Ctx } from "./context.ts";
 
@@ -144,6 +145,19 @@ export async function updatePerson(ctx: Ctx, id: number, input: PersonInput) {
   });
 }
 
+/** "Lend to someone": opens an account, optionally with its first line — both or neither. */
+export function openAccount(
+  ctx: Ctx,
+  input: PersonInput,
+  first: { amount: number; direction: "gave" | "got"; occurredAt: string; note: string; clientKey: string } | null,
+): Promise<number> {
+  return withTx(ctx, async (ctx) => {
+    const personId = await createPerson(ctx, input);
+    if (first) await addSlateLine(ctx, { ...first, personId });
+    return personId;
+  });
+}
+
 /** Settled accounts can be archived out of the way; open ones cannot. */
 export async function setArchived(ctx: Ctx, id: number, archived: boolean) {
   await withTx(ctx, async (ctx) => {
@@ -236,6 +250,13 @@ export async function recordReminder(ctx: Ctx, personId: number, amountText: str
   const p = await assertPerson(ctx, personId);
   await run(ctx.db, "UPDATE people SET reminders_sent = reminders_sent + 1, last_reminded_at = ? WHERE id = ? AND user_id = ?", [nowUtc(), personId, ctx.userId]);
   return { text: `Hi ${p.name.split(" ")[0]}, a gentle reminder about the ₹${amountText} from our slate. No rush — whenever you can.`, phone: p.phone };
+}
+
+/** A reminder for what someone owes you, recorded as sent. Refused when they owe nothing. */
+export async function remind(ctx: Ctx, personId: number): Promise<{ text: string; phone: string | null }> {
+  const { account } = await getAccount(ctx, personId);
+  if (account.balance <= 0) throw new UserError(`${account.name} doesn't owe you anything right now.`);
+  return recordReminder(ctx, personId, rupees(account.balance));
 }
 
 export async function deletePerson(ctx: Ctx, id: number) {

@@ -27,6 +27,11 @@ Engineering standard: [`rules.md`](rules.md).
 Without the Google values the app still runs: the welcome page says sign-in isn't configured, and `/api/health`
 reports `configured: false`.
 
+## API for the Android app
+
+`/api/v1/*` is a JSON API with bearer-token sessions and native Google sign-in, over the same services as
+the website. Reference: [`docs/api-v1.md`](docs/api-v1.md).
+
 ## Scripts
 
 | | |

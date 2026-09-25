@@ -57,6 +57,17 @@ export async function setTagBudget(ctx: Ctx, id: number, budget: number | null) 
   await run(ctx.db, "UPDATE tags SET budget = ? WHERE id = ? AND user_id = ?", [budget, id, ctx.userId]);
 }
 
+/**
+ * Saves the monthly budget and each listed tag's budget together: a tag
+ * deleted meanwhile (another tab, the phone) fails the whole save, never half of it.
+ */
+export async function saveBudgets(ctx: Ctx, monthly: number | null, perTag: [number, number | null][]) {
+  await withTx(ctx, async (ctx) => {
+    await run(ctx.db, "UPDATE users SET monthly_budget = ? WHERE id = ?", [monthly, ctx.userId]);
+    for (const [id, paise] of perTag) await setTagBudget(ctx, id, paise);
+  });
+}
+
 /** Moves every line (and rule) stamped `fromId` onto `intoId`, then removes `fromId`. */
 export function mergeTags(ctx: Ctx, fromId: number, intoId: number): Promise<{ moved: number }> {
   if (fromId === intoId) return Promise.reject(new UserError("Choose two different tags to merge"));

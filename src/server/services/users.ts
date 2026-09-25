@@ -1,6 +1,8 @@
 import { isValidTimeZone } from "../../lib/dates.ts";
 import type { TagColor } from "../../lib/types.ts";
 import { insertId, one, run, tx, withTx, type Db } from "../db/index.ts";
+import { revokeGrant } from "../auth/google.ts";
+import type { Config } from "../env.ts";
 import { nowUtc, UserError, type Ctx } from "./context.ts";
 
 export interface User {
@@ -90,6 +92,20 @@ export function setMailSenders(ctx: Ctx, senders: string[]): Promise<{ widened: 
     if (widened) await run(ctx.db, "UPDATE sync_state SET rescan_requested_at = ? WHERE user_id = ?", [nowUtc(), ctx.userId]);
     return { widened };
   });
+}
+
+/**
+ * Closes the account: revokes our Gmail access at Google (when sign-in is set
+ * up here), then deletes the user and everything they own. The caller has
+ * already confirmed — `confirmEmail` must match the account's address.
+ */
+export async function closeAccount(ctx: Ctx, cfg: Config | null, confirmEmail: string) {
+  const user = await getUser(ctx.db, ctx.userId);
+  if (!user) return;
+  if (confirmEmail.trim().toLowerCase() !== user.email.toLowerCase())
+    throw new UserError("Type your email address exactly to confirm.", { confirm: "This doesn't match your email" });
+  if (cfg) await revokeGrant(ctx.db, cfg, ctx.userId);
+  await deleteUser(ctx.db, ctx.userId); // sessions go with it (FK cascade)
 }
 
 /** Permanently removes the user and everything they own (FK cascades). */

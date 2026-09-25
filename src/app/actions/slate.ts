@@ -1,13 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { rupees } from "@/lib/money";
 import { act } from "@/server/app";
-import { UserError } from "@/server/services/context";
 import {
-  addSlateLine, createPerson, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, recordReminder, setArchived, unlinkEntry, updatePerson,
+  addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, openAccount, remind, setArchived, unlinkEntry, updatePerson,
 } from "@/server/services/slate";
-import { withTx } from "@/server/db/index";
 import { idField, parseInput, personInput, slateLineInput } from "@/server/validation";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -27,11 +24,7 @@ export async function createPersonAction(form: FormData) {
           note: form.get("lineNote") || (form.get("direction") === "got" ? "Borrowed" : "Lent"), clientKey: form.get("clientKey"),
         })
       : null;
-    const id = await withTx(ctx, async (ctx) => {
-      const personId = await createPerson(ctx, input);
-      if (first) await addSlateLine(ctx, { ...first, personId });
-      return personId;
-    });
+    const id = await openAccount(ctx, input, first);
     refresh();
     return { ok: true, data: { id }, message: `Opened an account for ${input.name}.` };
   });
@@ -85,10 +78,7 @@ export async function unlinkEntryAction(entryId: number) {
 
 export async function remindAction(personId: number) {
   return act<{ text: string; phone: string | null }>("slate.remind", async ({ ctx }) => {
-    const id = parseInput(idField("Person"), personId);
-    const { account } = await getAccount(ctx, id);
-    if (account.balance <= 0) throw new UserError(`${account.name} doesn't owe you anything right now.`);
-    const r = await recordReminder(ctx, id, rupees(account.balance));
+    const r = await remind(ctx, parseInput(idField("Person"), personId));
     refresh();
     return { ok: true, data: r };
   });

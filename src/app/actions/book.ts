@@ -4,12 +4,9 @@
 
 import { revalidatePath } from "next/cache";
 import { act } from "@/server/app";
-import { withTx } from "@/server/db/index";
 import { createRule, deleteRule, moveRule, updateRule } from "@/server/services/rules";
-import { createTag, deleteTag, mergeTags, setTagBudget, updateTag } from "@/server/services/tags";
-import { setMonthlyBudget } from "@/server/services/users";
-import { idField, parseInput, ruleInput, settingsInput, tagInput } from "@/server/validation";
-import { parsePaise } from "@/lib/money";
+import { createTag, deleteTag, mergeTags, saveBudgets, updateTag } from "@/server/services/tags";
+import { idField, parseBudgets, parseInput, ruleInput, tagInput } from "@/server/validation";
 import { UserError } from "@/server/services/context";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -51,23 +48,9 @@ export async function deleteTagAction(id: number) {
 
 export async function setBudgetsAction(form: FormData) {
   return act("budgets.save", async ({ ctx }) => {
-    const monthly = parseInput(settingsInput.shape.monthlyBudget, form.get("monthly") ?? "");
-    const perTag: [number, number | null][] = [];
-    const errors: Record<string, string> = {};
-    for (const [k, v] of form.entries()) {
-      const m = k.match(/^tag-(\d+)$/);
-      if (!m) continue;
-      const raw = String(v).trim();
-      const paise = raw ? parsePaise(raw) : null;
-      if (raw && paise == null) errors[k] = "Enter an amount like 5,000";
-      perTag.push([Number(m[1]), paise]);
-    }
-    if (Object.keys(errors).length) throw new UserError("Some budgets aren't amounts yet.", errors);
-    // All or nothing: a tag deleted in another tab must not leave half the budgets saved.
-    await withTx(ctx, async (ctx) => {
-      await setMonthlyBudget(ctx, monthly);
-      for (const [id, paise] of perTag) await setTagBudget(ctx, id, paise);
-    });
+    const perTagRaw = [...form.entries()].flatMap(([k, v]): [string, unknown][] => (k.match(/^tag-(\d+)$/) ? [[k.slice(4), v]] : []));
+    const { monthly, perTag } = parseBudgets(form.get("monthly") ?? "", perTagRaw);
+    await saveBudgets(ctx, monthly, perTag);
     refresh();
     return { ok: true, message: "Budgets saved." };
   });

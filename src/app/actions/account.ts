@@ -9,7 +9,7 @@ import { destroySession } from "@/server/auth/sessions";
 import { loadConfig } from "@/server/env";
 import { log } from "@/server/log";
 import { UserError } from "@/server/services/context";
-import { deleteUser, setMailSenders, updateSettings } from "@/server/services/users";
+import { closeAccount, setMailSenders, updateSettings } from "@/server/services/users";
 import { mailSendersInput, parseInput, settingsInput } from "@/server/validation";
 
 export async function signOutAction() {
@@ -54,12 +54,9 @@ export async function disconnectGmailAction() {
 
 /** Deletes the account and everything in it, after the user types their email to confirm. */
 export async function deleteAccountAction(form: FormData) {
-  const r = await act("settings.delete_account", async ({ user, ctx }) => {
-    if (String(form.get("confirm") ?? "").trim().toLowerCase() !== user.email.toLowerCase())
-      throw new UserError("Type your email address exactly to confirm.", { confirm: "This doesn't match your email" });
+  const r = await act("settings.delete_account", async ({ ctx }) => {
     const cfg = loadConfig();
-    if (cfg.ok) await revokeGrant(ctx.db, cfg.config, ctx.userId);
-    await deleteUser(ctx.db, ctx.userId); // sessions go with it (FK cascade)
+    await closeAccount(ctx, cfg.ok ? cfg.config : null, String(form.get("confirm") ?? ""));
     log.info("account.deleted", { userId: ctx.userId });
   });
   if (!r.ok) return r;

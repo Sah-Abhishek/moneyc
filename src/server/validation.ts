@@ -146,6 +146,30 @@ export const settingsInput = z.object({
   autoFile: z.boolean(),
 });
 
+/**
+ * Budgets: the monthly figure and each tag's, as typed. Every bad amount is
+ * reported (keyed "tag-<id>" / "monthly") before anything is saved.
+ */
+export function parseBudgets(monthlyRaw: unknown, perTagRaw: [unknown, unknown][]): { monthly: number | null; perTag: [number, number | null][] } {
+  const errors: Record<string, string> = {};
+  const amount = (raw: unknown, key: string, example: string) => {
+    const s = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
+    if (!s) return null;
+    const p = parsePaise(s);
+    if (p == null || p > MAX_PAISE) errors[key] = `Enter an amount like ${example}`;
+    return p;
+  };
+  const monthly = amount(monthlyRaw, "monthly", "70,000");
+  const perTag: [number, number | null][] = [];
+  for (const [rawId, raw] of perTagRaw) {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) throw new UserError("Invalid tag");
+    perTag.push([id, amount(raw, `tag-${id}`, "5,000")]);
+  }
+  if (Object.keys(errors).length) throw new UserError("Some budgets aren't amounts yet.", errors);
+  return { monthly, perTag };
+}
+
 export const MAX_MAIL_SENDERS = 20;
 
 /** "Read mail from": every known bank, or only the listed senders (one per line; commas work too). */
