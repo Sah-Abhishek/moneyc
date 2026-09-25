@@ -1,4 +1,4 @@
-import { AutoFileToggle, RestoreSlipButton } from "@/components/WireControls";
+import { AutoFileToggle, DeleteSlipButton, RestoreSlipButton } from "@/components/WireControls";
 import { WireDesk } from "@/components/Wire";
 import { clock12, dayMonth } from "@/lib/dates";
 import { rupeesExact } from "@/lib/money";
@@ -10,7 +10,7 @@ import s from "../section.module.css";
 
 export const metadata = { title: "The Wire — Money Control" };
 
-const STATUS_LABEL = { filed: "Filed", ignored: "Set aside", duplicate: "Matched an existing line" } as const;
+const STATUS_LABEL = { filed: "Filed", ignored: "Archived", duplicate: "Matched an existing line" } as const;
 
 export default async function WirePage() {
   const { user, ctx } = await requireUser();
@@ -44,7 +44,7 @@ export default async function WirePage() {
           </h2>
         </div>
         {decided.length === 0 ? (
-          <p className="page-lede">Mail you file, set aside or match will be listed here.</p>
+          <p className="page-lede">Mail you file, archive or match will be listed here.</p>
         ) : (
           <ul className={s.list}>
             {decided.map((d) => (
@@ -59,7 +59,12 @@ export default async function WirePage() {
                 <span className={s.listStatus} data-status={d.status}>
                   {STATUS_LABEL[d.status as keyof typeof STATUS_LABEL]}
                 </span>
-                {d.status === "ignored" && <RestoreSlipButton id={d.id} />}
+                {d.status === "ignored" && (
+                  <span className={s.listActions}>
+                    <RestoreSlipButton id={d.id} />
+                    <DeleteSlipButton id={d.id} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { restoreSlipAction, setAutoFileAction } from "@/app/actions/wire";
+import { deleteSlipAction, restoreSlipAction, setAutoFileAction } from "@/app/actions/wire";
+import { ConfirmButton } from "./ui/Confirm";
 import { useToast } from "./ui/Toaster";
 import { callAction } from "./ui/useSubmit";
 import s from "./WireControls.module.css";
@@ -58,5 +59,24 @@ export function RestoreSlipButton({ id }: { id: number }) {
     >
       {pending ? "…" : "Put back"}
     </button>
+  );
+}
+
+export function DeleteSlipButton({ id }: { id: number }) {
+  const toast = useToast();
+  const [pending, start] = useTransition();
+  return (
+    <ConfirmButton
+      label="Delete"
+      question="Delete for good?"
+      confirmLabel="Delete"
+      pending={pending}
+      onConfirm={() =>
+        start(async () => {
+          const r = await callAction(() => deleteSlipAction(id));
+          toast(r.ok ? { tone: "info", message: r.message ?? "Mail deleted." } : { tone: "error", message: r.error });
+        })
+      }
+    />
   );
 }

@@ -316,6 +316,9 @@ a.chip[aria-disabled="true"] { pointer-events: none; opacity: 0.45; }
   padding: 10px 0;
   border-bottom: 1px solid var(--rule-hair);
 }
+.form-row[hidden] {
+  display: none;
+}
 .form-row > label,
 .form-row > .form-label {
   font-family: var(--mono);

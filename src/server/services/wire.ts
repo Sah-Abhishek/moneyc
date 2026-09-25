@@ -10,7 +10,9 @@ import { engineRules } from "./rules.ts";
 import { linkEntryToPerson, listAccounts, matchPerson, type Account } from "./slate.ts";
 import { assertTag, tagMap } from "./tags.ts";
 
-export type MailStatus = "waiting" | "filed" | "ignored" | "duplicate" | "skipped";
+// "ignored" is shown as Archived. "deleted" keeps only the row's Gmail id (the
+// text is wiped) so the sync never brings the mail back.
+export type MailStatus = "waiting" | "filed" | "ignored" | "duplicate" | "skipped" | "deleted";
 
 export interface WireSlip {
   id: number;
@@ -119,10 +121,17 @@ async function claim(ctx: Ctx, id: number, from: MailStatus, to: MailStatus) {
   if (changes) return;
   const now = await one<{ status: MailStatus }>(ctx.db, "SELECT status FROM wire_mails WHERE id = ? AND user_id = ?", [id, ctx.userId]);
   if (!now) throw new NotFoundError("That mail is no longer on the wire.");
-  throw new ConflictError(
-    now.status === "filed" ? "That mail has already been filed — probably from another tab." : `That mail was already ${now.status === "duplicate" ? "matched to an existing line" : now.status}.`,
-  );
+  throw new ConflictError(STATUS_CONFLICT[now.status]);
 }
+
+const STATUS_CONFLICT: Record<MailStatus, string> = {
+  waiting: "That mail is already back on the desk.",
+  filed: "That mail has already been filed — probably from another tab.",
+  ignored: "That mail was already archived.",
+  duplicate: "That mail was already matched to an existing line.",
+  skipped: "That mail isn't a transaction, so it isn't on the wire.",
+  deleted: "That mail was already deleted.",
+};
 
 export interface FileOptions {
   payee?: string | null;
@@ -190,7 +199,24 @@ export function restoreFromDuplicate(ctx: Ctx, mailId: number) {
   return claim(ctx, mailId, "duplicate", "waiting");
 }
 
-/** Puts an ignored mail back on the desk. */
+/**
+ * Deletes a mail from the wire for good: its text is wiped and it never comes
+ * back from Gmail (nothing in Gmail changes — access is read-only). Only mail
+ * on the desk or in the archive; filed mail is changed through its ledger line.
+ */
+export async function deleteMail(ctx: Ctx, mailId: number) {
+  const { changes } = await run(
+    ctx.db,
+    "UPDATE wire_mails SET status = 'deleted', subject = NULL, body = '', decided_at = ? WHERE id = ? AND user_id = ? AND status IN ('waiting', 'ignored')",
+    [nowUtc(), mailId, ctx.userId],
+  );
+  if (changes) return;
+  const now = await one<{ status: MailStatus }>(ctx.db, "SELECT status FROM wire_mails WHERE id = ? AND user_id = ?", [mailId, ctx.userId]);
+  if (!now) throw new NotFoundError("That mail is no longer on the wire.");
+  throw new ConflictError(STATUS_CONFLICT[now.status]);
+}
+
+/** Puts an archived mail back on the desk. */
 export function restoreMail(ctx: Ctx, mailId: number) {
   return claim(ctx, mailId, "ignored", "waiting");
 }
@@ -243,7 +269,7 @@ export async function wireStats(ctx: Ctx) {
        FROM entries WHERE user_id = ? AND source = 'wire' AND auto AND deleted_at IS NULL AND substr(occurred_at, 1, 7) = ?`,
       [ctx.userId, ym],
     ).then((x) => x!),
-    one<{ n: number }>(ctx.db, "SELECT COUNT(DISTINCT bank) AS n FROM wire_mails WHERE user_id = ? AND status <> 'skipped'", [ctx.userId]).then((x) => x!.n),
+    one<{ n: number }>(ctx.db, "SELECT COUNT(DISTINCT bank) AS n FROM wire_mails WHERE user_id = ? AND status NOT IN ('skipped', 'deleted')", [ctx.userId]).then((x) => x!.n),
   ]);
   return {
     ym,

@@ -18,6 +18,7 @@ export const BANK_DOMAINS: { domain: string; name: string }[] = [
   { domain: "bobfinancial.com", name: "BoB Financial" },
   { domain: "canarabank.com", name: "Canara Bank" },
   { domain: "unionbankofindia.co.in", name: "Union Bank" },
+  { domain: "ubi.bank.in", name: "Union Bank" },
   { domain: "federalbank.co.in", name: "Federal Bank" },
   { domain: "aubank.in", name: "AU Bank" },
   { domain: "rblbank.com", name: "RBL Bank" },
@@ -45,9 +46,20 @@ export function bankFor(sender: string): string {
   return base ? base.charAt(0).toUpperCase() + base.slice(1) : "Unknown sender";
 }
 
-/** Gmail search for transaction alerts from known senders newer than `afterEpochSeconds`. */
-export function buildQuery(extraSenders: string[], afterEpochSeconds: number): string {
-  const senders = [...new Set([...BANK_DOMAINS.map((b) => b.domain), ...extraSenders.map((s) => s.trim().toLowerCase()).filter(Boolean)])];
+/** "@HDFCBank.net " → "hdfcbank.net"; addresses and domains are compared this way everywhere. */
+export const normaliseSender = (s: string) => s.trim().toLowerCase().replace(/^@/, "");
+
+/** A full address, or a bare domain like hdfcbank.net. */
+export const SENDER_PATTERN = /^[^@\s()"]+@[^@\s()"]+\.[^@\s()"]+$|^@?[a-z0-9.-]+\.[a-z]{2,}$/i;
+
+/**
+ * Gmail search for transaction alerts newer than `afterEpochSeconds`. With an
+ * `only` list the search is exactly those senders; otherwise it is every known
+ * bank plus the senders named in rules.
+ */
+export function buildQuery(extraSenders: string[], afterEpochSeconds: number, only: string[] = []): string {
+  const pick = only.length ? only : [...BANK_DOMAINS.map((b) => b.domain), ...extraSenders];
+  const senders = [...new Set(pick.map(normaliseSender).filter(Boolean))];
   return `from:(${senders.join(" OR ")}) after:${Math.floor(afterEpochSeconds)}`;
 }
 

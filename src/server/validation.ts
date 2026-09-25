@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isWallClock } from "../lib/dates.ts";
 import { parsePaise } from "../lib/money.ts";
 import { CHANNELS, TAG_COLORS } from "../lib/types.ts";
+import { normaliseSender, SENDER_PATTERN } from "./gmail/banks.ts";
 import { UserError } from "./services/context.ts";
 
 // Server-side validation for everything that arrives from a form. The client
@@ -144,6 +145,24 @@ export const settingsInput = z.object({
   timezone: z.string().min(1),
   autoFile: z.boolean(),
 });
+
+export const MAX_MAIL_SENDERS = 20;
+
+/** "Read mail from": every known bank, or only the listed senders (one per line; commas work too). */
+export const mailSendersInput = z
+  .object({
+    scope: z.enum(["banks", "only"], { error: "Choose where mail is read from" }),
+    senders: z.string().max(4000, "That list is too long").optional(),
+  })
+  .transform((r, ctx) => {
+    if (r.scope === "banks") return [];
+    const list = [...new Set((r.senders ?? "").split(/[\n,;]+/).map(normaliseSender).filter(Boolean))];
+    const bad = list.find((s) => s.length > 120 || !SENDER_PATTERN.test(s));
+    if (bad) ctx.addIssue({ code: "custom", path: ["senders"], message: `“${bad.slice(0, 60)}” isn't an email address or a domain like hdfcbank.net` });
+    else if (!list.length) ctx.addIssue({ code: "custom", path: ["senders"], message: "Add at least one sender, or choose every bank" });
+    else if (list.length > MAX_MAIL_SENDERS) ctx.addIssue({ code: "custom", path: ["senders"], message: `List at most ${MAX_MAIL_SENDERS} senders` });
+    return list;
+  });
 
 export { idField };
 

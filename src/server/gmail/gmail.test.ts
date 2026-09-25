@@ -2,8 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { freshCtx, gmailMessage, tagId } from "../test-helpers.ts";
 import { createRule } from "../services/rules.ts";
-import { listSlips, waitingCount } from "../services/wire.ts";
+import { deleteMail, listSlips, waitingCount } from "../services/wire.ts";
 import { listEntries } from "../services/entries.ts";
+import { getUser, setMailSenders } from "../services/users.ts";
+import { mailSendersInput, parseInput } from "../validation.ts";
+import { UserError } from "../services/context.ts";
 import { addressOf, bankFor, buildQuery } from "./banks.ts";
 import { gmailClient, GmailError, type GmailClient } from "./client.ts";
 import { htmlToText, messageText, type GmailMessage } from "./mime.ts";
@@ -36,6 +39,87 @@ test("banks: sender addresses and bank names", async () => {
   assert.equal(bankFor("donotreply.sbiatm@alerts.sbi.co.in"), "SBI");
   assert.equal(bankFor("noreply@examplebank.com"), "Examplebank");
   assert.match(buildQuery(["pay@mywallet.in"], 1_700_000_000), /from:\(.*hdfcbank\.net.*pay@mywallet\.in\) after:1700000000/);
+  assert.equal(bankFor("noreplyubi-txn@ubi.bank.in"), "Union Bank");
+  // An "only" list is exactly the search: no built-in banks, no rule senders.
+  assert.equal(buildQuery(["pay@mywallet.in"], 1_700_000_000, ["noreplyubi-txn@ubi.bank.in"]), "from:(noreplyubi-txn@ubi.bank.in) after:1700000000");
+});
+
+test("mail senders: validation normalises, dedupes and explains bad input", () => {
+  assert.deepEqual(parseInput(mailSendersInput, { scope: "banks", senders: "whatever" }), []);
+  assert.deepEqual(parseInput(mailSendersInput, { scope: "only", senders: " NoReplyUBI-txn@UBI.bank.in \n@hdfcbank.net, noreplyubi-txn@ubi.bank.in\n\n" }), [
+    "noreplyubi-txn@ubi.bank.in", "hdfcbank.net",
+  ]);
+  const fieldError = (senders: string) => {
+    try {
+      parseInput(mailSendersInput, { scope: "only", senders });
+    } catch (e) {
+      assert.ok(e instanceof UserError);
+      return e.fieldErrors?.senders;
+    }
+    assert.fail("expected a validation error");
+  };
+  assert.match(fieldError("") ?? "", /at least one sender/);
+  assert.match(fieldError("not an address") ?? "", /isn't an email address/);
+  assert.match(fieldError("a@b.c OR x@y.z") ?? "", /isn't an email address/); // can't smuggle Gmail search syntax
+  assert.match(fieldError(Array.from({ length: 21 }, (_, i) => `a${i}@bank.in`).join("\n")) ?? "", /at most 20/);
+});
+
+test("sync reads only the chosen senders; widening the list rescans the first-sync window", async () => {
+  const ctx = await freshCtx();
+  const queries: string[] = [];
+  const client: GmailClient = { async list(q) { queries.push(q); return { ids: [] }; }, async get() { throw new Error("unused"); } };
+  const read = async () => {
+    await ctx.db.query("UPDATE sync_state SET last_started_at = NULL", []);
+    await syncMailbox({ ctx, client, autoFile: true, force: true });
+    return queries.at(-1)!;
+  };
+  const afterDays = (q: string) => Math.round((Date.now() / 1000 - Number(q.match(/after:(\d+)/)![1])) / 86_400);
+
+  assert.match(await read(), /hdfcbank\.net/);
+
+  // Choosing a list is new to the search, so the next read looks back 90 days, then catches up normally.
+  assert.deepEqual(await setMailSenders(ctx, ["noreplyubi-txn@ubi.bank.in"]), { widened: true });
+  assert.deepEqual((await getUser(ctx.db, ctx.userId))!.mailSenders, ["noreplyubi-txn@ubi.bank.in"]);
+  let q = await read();
+  assert.match(q, /^from:\(noreplyubi-txn@ubi\.bank\.in\) /);
+  assert.equal(afterDays(q), 90);
+  assert.equal((await readSyncState(ctx.db, ctx.userId)).rescanRequestedAt, null);
+  assert.equal(afterDays(await read()), 2);
+
+  // Narrowing never rescans; back to every bank does.
+  assert.deepEqual(await setMailSenders(ctx, ["noreplyubi-txn@ubi.bank.in"]), { widened: false });
+  assert.deepEqual(await setMailSenders(ctx, []), { widened: true });
+  q = await read();
+  assert.match(q, /hdfcbank\.net/);
+  assert.equal(afterDays(q), 90);
+});
+
+test("a deleted mail is never read back in from Gmail", async () => {
+  const ctx = await freshCtx();
+  const msgs = [gmailMessage("m1", "alerts@hdfcbank.net", "Alert", HDFC_TEXT)];
+  await syncMailbox({ ctx, client: fakeClient(msgs), autoFile: false, force: true });
+  const [slip] = await listSlips(ctx, "waiting");
+  await deleteMail(ctx, slip.id);
+  await ctx.db.query("UPDATE sync_state SET last_started_at = NULL, last_success_at = NULL", []); // a full re-read
+  const client = fakeClient(msgs);
+  const again = await syncMailbox({ ctx, client, autoFile: false, force: true });
+  assert.equal(again.status === "done" && again.fetched, 0);
+  assert.equal(client.gets.length, 0);
+  assert.equal(await waitingCount(ctx), 0);
+});
+
+test("a sender change during a read is not lost when that read finishes", async () => {
+  const ctx = await freshCtx();
+  await setMailSenders(ctx, ["a@bank.in"]);
+  const client: GmailClient = {
+    async list() {
+      await setMailSenders(ctx, ["a@bank.in", "b@bank.in"]); // lands mid-read
+      return { ids: [] };
+    },
+    async get() { throw new Error("unused"); },
+  };
+  await syncMailbox({ ctx, client, autoFile: true, force: true });
+  assert.notEqual((await readSyncState(ctx.db, ctx.userId)).rescanRequestedAt, null);
 });
 
 test("mime: plain text preferred, HTML flattened, attachments ignored", async () => {

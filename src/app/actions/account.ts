@@ -6,11 +6,12 @@ import { redirect } from "next/navigation";
 import { act, db, SESSION_COOKIE } from "@/server/app";
 import { revokeGrant } from "@/server/auth/google";
 import { destroySession } from "@/server/auth/sessions";
+import { FIRST_SYNC_DAYS } from "@/server/gmail/sync";
 import { loadConfig } from "@/server/env";
 import { log } from "@/server/log";
 import { UserError } from "@/server/services/context";
-import { deleteUser, updateSettings } from "@/server/services/users";
-import { parseInput, settingsInput } from "@/server/validation";
+import { deleteUser, setMailSenders, updateSettings } from "@/server/services/users";
+import { mailSendersInput, parseInput, settingsInput } from "@/server/validation";
 
 export async function signOutAction() {
   const jar = await cookies();
@@ -26,6 +27,17 @@ export async function saveSettingsAction(form: FormData) {
     }));
     revalidatePath("/", "layout");
     return { ok: true, message: "Settings saved." };
+  });
+}
+
+/** Chooses which senders the wire reads. Mail already on the wire stays. */
+export async function saveMailSendersAction(form: FormData) {
+  return act("settings.mail_senders", async ({ ctx }) => {
+    const senders = parseInput(mailSendersInput, { scope: form.get("scope"), senders: form.get("senders") ?? "" });
+    const { widened } = await setMailSenders(ctx, senders);
+    revalidatePath("/", "layout");
+    const who = senders.length ? `only ${senders.length === 1 ? senders[0] : `${senders.length} senders`}` : "every bank we know";
+    return { ok: true, message: widened ? `Reading ${who}. The next read looks back ${FIRST_SYNC_DAYS} days.` : `Reading ${who}.` };
   });
 }
 

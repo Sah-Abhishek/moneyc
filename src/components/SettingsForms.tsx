@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteAccountAction, disconnectGmailAction, saveSettingsAction, signOutAction } from "@/app/actions/account";
+import { deleteAccountAction, disconnectGmailAction, saveMailSendersAction, saveSettingsAction, signOutAction } from "@/app/actions/account";
 import { rupeesExact } from "@/lib/money";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
 import { useToast } from "./ui/Toaster";
@@ -19,6 +19,8 @@ export function SettingsForms(p: {
   connection: Connection;
   lastSync: string | null;
   lastError: string | null;
+  mailSenders: string[];
+  bankCount: number;
 }) {
   const toast = useToast();
   const save = useSubmit(saveSettingsAction, { onSuccess: (r) => toast({ tone: "info", message: r.message ?? "Saved." }) });
@@ -117,6 +119,8 @@ export function SettingsForms(p: {
             />
           )}
         </div>
+
+        <MailSendersForm senders={p.mailSenders} bankCount={p.bankCount} />
       </section>
 
       <section className={s.section} aria-labelledby="set-account">
@@ -147,5 +151,66 @@ export function SettingsForms(p: {
         </form>
       </section>
     </div>
+  );
+}
+
+/** "Read mail from": every known bank, or only the senders listed here. */
+function MailSendersForm(p: { senders: string[]; bankCount: number }) {
+  const toast = useToast();
+  const save = useSubmit(saveMailSendersAction, { onSuccess: (r) => toast({ tone: "info", message: r.message ?? "Saved." }) });
+  const [scope, setScope] = useState<"banks" | "only">(p.senders.length ? "only" : "banks");
+
+  return (
+    <form onSubmit={save.onSubmit} className="form-rows" noValidate>
+      <div className="form-row">
+        <span className="form-label" id="set-from-label">
+          Read mail from
+        </span>
+        <div>
+          <div className="segmented" role="radiogroup" aria-labelledby="set-from-label">
+            <label>
+              <input type="radio" name="scope" value="banks" checked={scope === "banks"} onChange={() => setScope("banks")} />
+              <span>Every bank we know</span>
+            </label>
+            <label>
+              <input type="radio" name="scope" value="only" checked={scope === "only"} onChange={() => setScope("only")} />
+              <span>Only these senders</span>
+            </label>
+          </div>
+          <span className="hint">
+            {scope === "banks"
+              ? `Alerts from ${p.bankCount} banks and wallets, plus any sender named in your rules.`
+              : "Nothing else in your inbox is searched — not even senders named in your rules."}
+          </span>
+        </div>
+      </div>
+      {/* Hidden, not removed, so switching back and forth keeps what was typed. */}
+      <div className="form-row" hidden={scope !== "only"}>
+        <label htmlFor="set-senders">Senders</label>
+        <div>
+          <textarea
+            id="set-senders"
+            name="senders"
+            className="textarea mono"
+            defaultValue={p.senders.join("\n")}
+            placeholder={"noreplyubi-txn@ubi.bank.in\nalerts@hdfcbank.net"}
+            spellCheck={false}
+            autoCapitalize="off"
+            aria-invalid={!!save.fieldErrors.senders || undefined}
+            aria-describedby="set-senders-hint set-senders-err"
+          />
+          <span className="hint" id="set-senders-hint">
+            One per line — a full address, or a domain like hdfcbank.net for every address at that bank.
+          </span>
+          <FieldError id="set-senders-err" message={save.fieldErrors.senders} />
+        </div>
+      </div>
+      <div className={s.actions}>
+        <FormError message={save.fieldErrors.senders ? null : save.error} />
+        <button type="submit" className="btn btn-ink" disabled={save.pending}>
+          {save.pending ? "Saving…" : "Save senders"}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -37,15 +37,20 @@ export interface SyncState {
   lastSuccessAt: string | null;
   lastError: string | null;
   lastErrorAt: string | null;
+  /** set when the sender list widened; cleared by the next complete read */
+  rescanRequestedAt: string | null;
 }
 
 export async function readSyncState(db: Db, userId: number): Promise<SyncState> {
-  const r = await one<{ running_since: string | null; last_started_at: string | null; last_success_at: string | null; last_error: string | null; last_error_at: string | null }>(
+  const r = await one<{
+    running_since: string | null; last_started_at: string | null; last_success_at: string | null;
+    last_error: string | null; last_error_at: string | null; rescan_requested_at: string | null;
+  }>(
     db, "SELECT * FROM sync_state WHERE user_id = ?", [userId],
   );
   return {
     runningSince: r?.running_since ?? null, lastStartedAt: r?.last_started_at ?? null, lastSuccessAt: r?.last_success_at ?? null,
-    lastError: r?.last_error ?? null, lastErrorAt: r?.last_error_at ?? null,
+    lastError: r?.last_error ?? null, lastErrorAt: r?.last_error_at ?? null, rescanRequestedAt: r?.rescan_requested_at ?? null,
   };
 }
 
@@ -78,9 +83,10 @@ export async function syncMailbox({ ctx, client, autoFile, force = false }: Sync
   const started = Date.now();
   try {
     const state = await readSyncState(db, userId);
-    const since = state.lastSuccessAt ? Date.parse(state.lastSuccessAt) - OVERLAP_MS : started - FIRST_SYNC_DAYS * 86_400_000;
+    const since = state.lastSuccessAt && !state.rescanRequestedAt ? Date.parse(state.lastSuccessAt) - OVERLAP_MS : started - FIRST_SYNC_DAYS * 86_400_000;
     const extraSenders = (await all<{ value: string }>(db, "SELECT value FROM rules WHERE user_id = ? AND field = 'sender'", [userId])).map((r) => r.value);
-    const q = buildQuery(extraSenders, since / 1000);
+    const only = (await one<{ mail_senders: string }>(db, "SELECT mail_senders FROM users WHERE id = ?", [userId]))?.mail_senders.split("\n").filter(Boolean) ?? [];
+    const q = buildQuery(extraSenders, since / 1000, only);
 
     // 1. Collect ids we haven't stored yet.
     const fresh: string[] = [];
@@ -121,10 +127,16 @@ export async function syncMailbox({ ctx, client, autoFile, force = false }: Sync
       }
     }
 
-    // Only advance the window when we have read everything in it.
-    await run(db, "UPDATE sync_state SET running_since = NULL, last_error = NULL, last_success_at = CASE WHEN ?::boolean THEN last_success_at ELSE ? END, mails_seen = mails_seen + ? WHERE user_id = ?", [
-      more, new Date(started).toISOString(), batch.length, userId,
-    ]);
+    // Only advance the window when we have read everything in it. A rescan is
+    // done once a complete read has covered it — unless the senders changed
+    // again while this read ran, which leaves a newer request in place.
+    await run(
+      db,
+      `UPDATE sync_state SET running_since = NULL, last_error = NULL, last_success_at = CASE WHEN ?::boolean THEN last_success_at ELSE ? END,
+         rescan_requested_at = CASE WHEN NOT ?::boolean AND rescan_requested_at IS NOT DISTINCT FROM ?::text THEN NULL ELSE rescan_requested_at END,
+         mails_seen = mails_seen + ? WHERE user_id = ?`,
+      [more, new Date(started).toISOString(), more, state.rescanRequestedAt, batch.length, userId],
+    );
     log.info("wire.sync_done", { userId, fetched: batch.length, added, autoFiled, skipped, more, ms: Date.now() - started });
     return { status: "done", fetched: batch.length, added, autoFiled, skipped, more };
   } catch (e) {

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { act, runSync } from "@/server/app";
 import { UserError } from "@/server/services/context";
 import { setAutoFile } from "@/server/services/users";
-import { fileMail, ignoreMail, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail } from "@/server/services/wire";
+import { deleteMail, fileMail, ignoreMail, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail } from "@/server/services/wire";
 import { amountField, idField, parseInput } from "@/server/validation";
 import { z } from "zod";
 
@@ -47,7 +47,15 @@ export async function ignoreSlipAction(id: number) {
   return act("wire.ignore", async ({ ctx }) => {
     await ignoreMail(ctx, parseInput(idField("Mail"), id));
     refresh();
-    return { ok: true, message: "Mail set aside." };
+    return { ok: true, message: "Archived." };
+  });
+}
+
+export async function deleteSlipAction(id: number) {
+  return act("wire.delete", async ({ ctx }) => {
+    await deleteMail(ctx, parseInput(idField("Mail"), id));
+    refresh();
+    return { ok: true, message: "Mail deleted." };
   });
 }
 

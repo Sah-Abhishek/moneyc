@@ -1,6 +1,7 @@
 import { SettingsForms } from "@/components/SettingsForms";
 import { ago } from "@/lib/dates";
 import { requireUser, wireConnection } from "@/server/app";
+import { BANK_DOMAINS } from "@/server/gmail/banks";
 import { readSyncState } from "@/server/gmail/sync";
 
 export const metadata = { title: "Settings — Money Control" };
@@ -26,6 +27,8 @@ export default async function SettingsPage() {
         connection={connection}
         lastSync={sync.lastSuccessAt ? ago(sync.lastSuccessAt).toLowerCase() : null}
         lastError={sync.lastError}
+        mailSenders={user.mailSenders}
+        bankCount={new Set(BANK_DOMAINS.map((b) => b.name)).size}
       />
     </div>
   );

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { fileSlipAction, ignoreSlipAction, markDuplicateAction, restoreSlipAction, unfileSlipAction, unmarkDuplicateAction } from "@/app/actions/wire";
+import { deleteSlipAction, fileSlipAction, ignoreSlipAction, markDuplicateAction, restoreSlipAction, unfileSlipAction, unmarkDuplicateAction } from "@/app/actions/wire";
 import { dayMonth, posted } from "@/lib/dates";
 import { rupees, rupeesExact } from "@/lib/money";
 import type { Tag } from "@/lib/types";
@@ -10,7 +10,7 @@ import { maskRef } from "@/lib/wire/parse";
 import type { WireSlip as Slip } from "@/server/services/wire";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
-import { FieldError, FormError } from "./ui/Confirm";
+import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
 import s from "./Wire.module.css";
 
 // One parsed mail on the desk. What the parser pulled out is highlighted so
@@ -187,14 +187,25 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
         </div>
         <div className={s.slipActions}>
           {!editing && (
-            <button
-              type="button"
-              className={`btn btn-line ${s.ignore}`}
-              disabled={!!busy || pending}
-              onClick={() => run("ignore", () => ignoreSlipAction(slip.id), () => restoreSlipAction(slip.id))}
-            >
-              {busy === "ignore" ? "…" : "Ignore"}
-            </button>
+            <>
+              <ConfirmButton
+                label="Delete"
+                question="Delete this mail for good?"
+                confirmLabel="Delete"
+                className={`btn btn-line ${s.ignore}`}
+                pending={busy === "delete"}
+                onConfirm={() => run("delete", () => deleteSlipAction(slip.id))}
+              />
+              <button
+                type="button"
+                className={`btn btn-line ${s.ignore}`}
+                disabled={!!busy || pending}
+                title="Take it off the desk. You can put it back from the wire page."
+                onClick={() => run("archive", () => ignoreSlipAction(slip.id), () => restoreSlipAction(slip.id))}
+              >
+                {busy === "archive" ? "…" : "Archive"}
+              </button>
+            </>
           )}
           {!incomplete && (
             <button type="button" className="btn btn-line" onClick={() => setEditing((e) => !e)} disabled={pending}>

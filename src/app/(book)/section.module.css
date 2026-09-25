@@ -66,6 +66,12 @@
 }
 .listStatus[data-status="filed"] { color: var(--signal-credit); }
 .listStatus[data-status="ignored"] { color: var(--ink-faint); }
+.listActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
 .actions {
   display: flex;

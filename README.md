@@ -62,7 +62,9 @@ Decisions worth knowing:
   filing a mail is a compare-and-set on its status; edits carry a version and refuse to overwrite a newer
   one.
 - **The wire only reads bank mail.** The Gmail search is limited to known bank/wallet domains
-  (`src/server/gmail/banks.ts`) plus senders you add as rules. Mail that isn't a transaction is recorded
+  (`src/server/gmail/banks.ts`) plus senders you add as rules — or, when a user picks *Only these senders*
+  in Settings, exactly their list (rules don't widen it). Adding a sender makes the next read look back
+  90 days so its recent mail arrives; mail already on the wire is never removed. Mail that isn't a transaction is recorded
   as skipped with its text discarded. Google tokens are AES-256-GCM encrypted with `APP_SECRET`.
 - **Auto-filing is conservative.** It needs a complete parse and a known tag (or a "file" rule), and it
   never applies to likely duplicates, slate payments, or anything an "ask me first" rule matches.

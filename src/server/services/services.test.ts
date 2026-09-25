@@ -8,7 +8,7 @@ import { createRule, deleteRule, listRules, moveRule } from "./rules.ts";
 import { addSlateLine, createPerson, getAccount, listAccounts, matchPerson, slateStats, deletePerson } from "./slate.ts";
 import { monthSummary, monthlySpend, merchants } from "./summary.ts";
 import { createTag, deleteTag, listTags, mergeTags } from "./tags.ts";
-import { fileMail, ignoreMail, listSlips, markDuplicate, restoreMail, tryAutoFile, waitingCount } from "./wire.ts";
+import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreMail, tryAutoFile, waitingCount, wireStats } from "./wire.ts";
 
 const line = (over: Partial<Record<string, string>> = {}) =>
   parseInput(entryInput, { payee: "Swiggy", amount: "486", direction: "out", occurredAt: "2026-09-20T21:15", channel: "UPI", tagId: "", note: "", ...over });
@@ -207,7 +207,7 @@ test("edited payee/amount win over what was parsed", async () => {
   assert.equal(e.amount, -1500);
 });
 
-test("ignore and restore move a mail off and back onto the desk", async () => {
+test("archive and restore move a mail off and back onto the desk", async () => {
   const ctx = await freshCtx();
   const mail = await insertMail(ctx, HDFC);
   await ignoreMail(ctx, mail);
@@ -217,6 +217,33 @@ test("ignore and restore move a mail off and back onto the desk", async () => {
   await restoreMail(ctx, mail);
   assert.equal(await waitingCount(ctx), 1);
   assert.equal((await listSlips(ctx, "decided")).length, 0);
+});
+
+test("delete wipes a mail from the desk or the archive, and filed mail can't be deleted", async () => {
+  const ctx = await freshCtx();
+  const onDesk = await insertMail(ctx, HDFC, { gmailId: "g1" });
+  const archived = await insertMail(ctx, HDFC, { gmailId: "g2" });
+  const filed = await insertMail(ctx, HDFC, { gmailId: "g3" });
+  await ignoreMail(ctx, archived);
+  await fileMail(ctx, filed, { tagId: null });
+
+  await deleteMail(ctx, onDesk);
+  await deleteMail(ctx, archived);
+  const { rows } = await ctx.db.query("SELECT gmail_id, status, subject, body FROM wire_mails WHERE status = 'deleted' ORDER BY gmail_id", []);
+  assert.deepEqual(rows, [
+    { gmail_id: "g1", status: "deleted", subject: null, body: "" },
+    { gmail_id: "g2", status: "deleted", subject: null, body: "" },
+  ]);
+  assert.equal(await waitingCount(ctx), 0);
+  assert.deepEqual((await listSlips(ctx, "decided")).map((d) => d.status), ["filed"]);
+  assert.equal((await wireStats(ctx)).banksSeen, 1); // the filed one still counts
+
+  await assert.rejects(deleteMail(ctx, onDesk), /already deleted/);
+  await assert.rejects(deleteMail(ctx, filed), /already been filed/);
+  await assert.rejects(restoreMail(ctx, archived), ConflictError); // can't un-delete
+  await assert.rejects(deleteMail(ctx, 999_999), NotFoundError);
+  const other = await secondUser(ctx);
+  await assert.rejects(deleteMail(other, filed), NotFoundError);
 });
 
 test("a mail matching a hand-written line is flagged, and can be merged into it", async () => {

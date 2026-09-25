@@ -163,4 +163,11 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX oauth_states_created ON oauth_states(created_at);
   `,
+  /* 2 — which senders the wire reads */ `
+  -- Newline-separated addresses or domains. Empty = every bank in the built-in list.
+  ALTER TABLE users ADD COLUMN mail_senders TEXT NOT NULL DEFAULT '';
+  -- Set when the sender list widens: the next read looks back FIRST_SYNC_DAYS
+  -- instead of from the last read, so the new senders' recent mail arrives too.
+  ALTER TABLE sync_state ADD COLUMN rescan_requested_at TEXT;
+  `,
 ];

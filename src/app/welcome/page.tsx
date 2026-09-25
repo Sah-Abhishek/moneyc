@@ -173,7 +173,7 @@ processed successfully.
           <h3 className="eyebrow">Privacy note</h3>
           <p>
             We ask Google for read-only mail access and search only for mail from bank and wallet senders (plus any sender you add in
-            Rules). Alerts that aren&apos;t transactions are skipped and their text is never stored. Your Google tokens are encrypted at
+            Rules) — or, if you prefer, only the senders you list in Settings. Alerts that aren&apos;t transactions are skipped and their text is never stored. Your Google tokens are encrypted at
             rest. Disconnect Gmail or delete your account from Settings at any time; deleting removes everything.
           </p>
         </div>

@@ -1,6 +1,6 @@
 import { isValidTimeZone } from "../../lib/dates.ts";
 import type { TagColor } from "../../lib/types.ts";
-import { insertId, one, run, tx, type Db } from "../db/index.ts";
+import { insertId, one, run, tx, withTx, type Db } from "../db/index.ts";
 import { nowUtc, UserError, type Ctx } from "./context.ts";
 
 export interface User {
@@ -10,6 +10,8 @@ export interface User {
   timezone: string;
   monthlyBudget: number | null;
   autoFile: boolean;
+  /** senders the wire reads; empty = every bank in the built-in list */
+  mailSenders: string[];
   createdAt: string;
 }
 
@@ -27,12 +29,12 @@ const STARTER_TAGS: { name: string; color: TagColor; kind?: "income" }[] = [
 
 interface UserRow {
   id: number; email: string; name: string | null; timezone: string;
-  monthly_budget: number | null; auto_file: boolean; created_at: string;
+  monthly_budget: number | null; auto_file: boolean; mail_senders: string; created_at: string;
 }
 
 const toUser = (r: UserRow): User => ({
   id: r.id, email: r.email, name: r.name, timezone: r.timezone,
-  monthlyBudget: r.monthly_budget, autoFile: r.auto_file, createdAt: r.created_at,
+  monthlyBudget: r.monthly_budget, autoFile: r.auto_file, mailSenders: r.mail_senders.split("\n").filter(Boolean), createdAt: r.created_at,
 });
 
 export async function getUser(db: Db, id: number): Promise<User | undefined> {
@@ -70,6 +72,24 @@ export async function setMonthlyBudget(ctx: Ctx, paise: number | null) {
 
 export async function setAutoFile(ctx: Ctx, on: boolean) {
   await run(ctx.db, "UPDATE users SET auto_file = ? WHERE id = ?", [on, ctx.userId]);
+}
+
+/**
+ * Sets which senders the wire reads (empty = every known bank). When the list
+ * widens, the next read looks back over the first-sync window so recent mail
+ * from the new senders arrives too. Mail already on the wire is never removed.
+ */
+export function setMailSenders(ctx: Ctx, senders: string[]): Promise<{ widened: boolean }> {
+  return withTx(ctx, async (ctx) => {
+    const row = await one<{ mail_senders: string }>(ctx.db, "SELECT mail_senders FROM users WHERE id = ? FOR UPDATE", [ctx.userId]);
+    const before = row?.mail_senders.split("\n").filter(Boolean) ?? [];
+    // Any sender not listed before is new to the search (from "every bank" too:
+    // a listed sender may not be a bank we know). Back to every bank is wider as well.
+    const widened = senders.some((s) => !before.includes(s)) || (before.length > 0 && !senders.length);
+    await run(ctx.db, "UPDATE users SET mail_senders = ? WHERE id = ?", [senders.join("\n"), ctx.userId]);
+    if (widened) await run(ctx.db, "UPDATE sync_state SET rescan_requested_at = ? WHERE user_id = ?", [nowUtc(), ctx.userId]);
+    return { widened };
+  });
 }
 
 /** Permanently removes the user and everything they own (FK cascades). */
