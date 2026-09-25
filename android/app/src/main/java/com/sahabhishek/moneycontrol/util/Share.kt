@@ -10,7 +10,9 @@ import java.io.File
 /** Hands a CSV to the share sheet (save to Drive, email it, open in Sheets…). */
 fun shareCsv(context: Context, filename: String, csv: String): Boolean {
   val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-  val file = File(dir, filename).apply { writeText(csv, Charsets.UTF_8) }
+  // The server sends a UTF-8 byte-order mark so spreadsheets read ₹ correctly; the HTTP
+  // client drops it when decoding, so it goes back on here.
+  val file = File(dir, filename).apply { writeText("\uFEFF" + csv.removePrefix("\uFEFF"), Charsets.UTF_8) }
   val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
   val send = Intent(Intent.ACTION_SEND).apply {
     type = "text/csv"

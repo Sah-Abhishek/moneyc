@@ -65,7 +65,7 @@ fun BoxScope.Toaster(messenger: Messenger) {
     }
   }
   Column(
-    Modifier.align(Alignment.BottomCenter).fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
+    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
       .padding(start = 16.dp, end = 16.dp, bottom = 76.dp)
       .semantics { liveRegion = LiveRegionMode.Polite },
     verticalArrangement = Arrangement.spacedBy(8.dp),

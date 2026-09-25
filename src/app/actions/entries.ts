@@ -7,11 +7,12 @@ import { entryInput, idField, parseInput, quickEntryInput } from "@/server/valid
 import { z } from "zod";
 
 const refresh = () => revalidatePath("/", "layout");
+const ENTRY_FIELDS = ["payee", "amount", "direction", "occurredAt", "channel", "tagId", "note", "chequeNo", "cash"];
 
 export async function addLineAction(form: FormData) {
   return act<{ id: number }>("entries.quick", async ({ ctx }) => {
     const input = parseInput(quickEntryInput, {
-      payee: form.get("payee"), amount: form.get("amount"), tagId: form.get("tag"), clientKey: form.get("clientKey"),
+      payee: form.get("payee"), amount: form.get("amount"), tagId: form.get("tag"), channel: form.get("channel"), clientKey: form.get("clientKey"),
     });
     const { entry, duplicate } = await addQuickEntry(ctx, input);
     refresh();
@@ -21,7 +22,7 @@ export async function addLineAction(form: FormData) {
 
 export async function createEntryAction(form: FormData) {
   return act<{ id: number }>("entries.create", async ({ ctx }) => {
-    const input = parseInput(entryInput, Object.fromEntries(["payee", "amount", "direction", "occurredAt", "channel", "tagId", "note"].map((k) => [k, form.get(k) ?? undefined])));
+    const input = parseInput(entryInput, Object.fromEntries(ENTRY_FIELDS.map((k) => [k, form.get(k) ?? undefined])));
     const key = parseInput(z.string().min(8).max(64), form.get("clientKey"));
     const { entry, duplicate } = await addEntry(ctx, input, key);
     refresh();
@@ -33,7 +34,7 @@ export async function updateEntryAction(form: FormData) {
   return act<{ id: number }>("entries.update", async ({ ctx }) => {
     const id = parseInput(idField("Line"), form.get("id"));
     const version = parseInput(z.coerce.number().int().positive(), form.get("version"));
-    const input = parseInput(entryInput, Object.fromEntries(["payee", "amount", "direction", "occurredAt", "channel", "tagId", "note"].map((k) => [k, form.get(k) ?? undefined])));
+    const input = parseInput(entryInput, Object.fromEntries(ENTRY_FIELDS.map((k) => [k, form.get(k) ?? undefined])));
     const entry = await updateEntry(ctx, id, input, version);
     refresh();
     return { ok: true, data: { id: entry.id }, message: "Saved." };

@@ -27,7 +27,15 @@ data class LineForm(
   val channel: String = "UPI",
   val tagId: Long? = null,
   val note: String = "",
-)
+  /** only when the channel is Cheque */
+  val chequeNo: String = "",
+  /** ATM money out: wallet | spent — a new line must be asked, so no default */
+  val cash: String? = null,
+) {
+  val cashOut get() = channel == "ATM" && direction == "out"
+  /** the withdrawal only moves money to the wallet: no tag, not spending */
+  val toWallet get() = cashOut && cash == "wallet"
+}
 
 data class EntryState(
   val entry: Entry? = null,
@@ -101,6 +109,9 @@ class EntryViewModel(
     channel = e.channel,
     tagId = e.tag?.id,
     note = e.note.orEmpty(),
+    chequeNo = if (e.channel == "Cheque") e.ref.orEmpty() else "",
+    // An ATM line that already exists had its answer given.
+    cash = if (e.channel == "ATM" && e.amount < 0) (if (e.toWallet) "wallet" else "spent") else null,
   )
 
   fun edit(f: (LineForm) -> LineForm) = _state.update { it.copy(form = f(it.form)) }
@@ -110,7 +121,14 @@ class EntryViewModel(
     if (s.pending || s.deleting) return
     _state.update { it.copy(pending = true, error = null, fieldErrors = emptyMap()) }
     val f = s.form
-    val draft = LineDraft(f.payee, f.amount, f.direction, f.occurredAt, f.channel, f.tagId, f.note)
+    val draft = LineDraft(
+      f.payee, f.amount, f.direction, f.occurredAt, f.channel,
+      tagId = if (f.toWallet) null else f.tagId,
+      note = f.note,
+      // A line from the wire keeps the number the bank mailed.
+      chequeNo = f.chequeNo.takeIf { f.channel == "Cheque" && s.entry?.source != "wire" },
+      cash = f.cash.takeIf { f.cashOut },
+    )
     viewModelScope.launch {
       val r = if (s.entry == null) book.create(draft, clientKey) else book.update(s.entry.id, draft, s.entry.version)
       when (r) {

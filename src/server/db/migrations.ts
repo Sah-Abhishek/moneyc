@@ -185,4 +185,29 @@ export const MIGRATIONS: string[] = [
     AND m.status NOT IN ('filed', 'duplicate')
     AND m.received_at < to_char((u.created_at::timestamptz AT TIME ZONE u.timezone)::date, 'YYYY-MM-DD');
   `,
+  /* 5 — cash moved to the wallet, and tag groups */ `
+  -- An ATM withdrawal the owner will write down spend by spend: the money only
+  -- moved from the bank to the wallet, so it counts neither as spending nor
+  -- against the balance (the cash lines written by hand do). Existing lines
+  -- keep counting as spent, as they did before.
+  ALTER TABLE entries ADD COLUMN to_wallet BOOLEAN NOT NULL DEFAULT FALSE;
+
+  -- Named sets of tags ("Health": Healthy, Junk, Leisure) to read spending
+  -- through. A tag can sit in any number of groups.
+  CREATE TABLE tag_groups (
+    id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX tag_groups_user_name ON tag_groups(user_id, lower(name));
+
+  CREATE TABLE tag_group_tags (
+    group_id      BIGINT NOT NULL REFERENCES tag_groups(id) ON DELETE CASCADE,
+    tag_id        BIGINT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, tag_id)
+  );
+  CREATE INDEX tag_group_tags_tag ON tag_group_tags(tag_id);
+  `,
 ];

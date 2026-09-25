@@ -9,8 +9,10 @@ export const TAG_COLOR_LABEL: Record<TagColor, string> = {
   teal: "Teal", indigo: "Indigo", credit: "Green", faint: "Stone",
 };
 
-export const CHANNELS = ["UPI", "Card", "Cash", "NEFT", "IMPS", "RTGS", "ATM", "Bank"] as const;
+export const CHANNELS = ["UPI", "Card", "Cash", "Cheque", "NEFT", "IMPS", "RTGS", "ATM", "Bank"] as const;
 export type Channel = (typeof CHANNELS)[number];
+/** Ways to pay the ledger's one-line form offers: every channel but ATM, whose cash needs the full form's question. */
+export const QUICK_CHANNELS = ["Cash", "UPI", "Card", "Cheque", "NEFT", "IMPS", "RTGS", "Bank"] as const satisfies readonly Channel[];
 
 export interface Tag {
   id: number;
@@ -18,6 +20,14 @@ export interface Tag {
   color: TagColor;
   kind: "spend" | "income";
   budget: number | null;
+}
+
+/** A named set of tags to read spending through ("Health": Healthy, Junk, Leisure). */
+export interface TagGroup {
+  id: number;
+  name: string;
+  /** spending tags in the group, by name */
+  tagIds: number[];
 }
 
 export interface Entry {
@@ -34,6 +44,11 @@ export interface Entry {
   auto: boolean;
   personId: number | null;
   personName: string | null;
+  /**
+   * cash taken out to spend by hand: the money only moved to the wallet, so
+   * it counts neither as spending nor against the balance
+   */
+  toWallet: boolean;
   /** bumped on every change; the editor sends it back to detect concurrent edits */
   version: number;
   /** running balance of the whole book after this line (paise) */

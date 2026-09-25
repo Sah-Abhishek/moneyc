@@ -1,13 +1,15 @@
 import { daysInMonth, shiftYm, wallClock, ymOf } from "../../lib/dates.ts";
-import type { Tag } from "../../lib/types.ts";
+import type { Tag, TagGroup } from "../../lib/types.ts";
 import { all, one } from "../db/index.ts";
 import type { Ctx } from "./context.ts";
+import { listGroups } from "./tagGroups.ts";
 import { tagMap } from "./tags.ts";
 
 // Spending figures count only money that actually left for goods and services:
 // live lines, negative amounts, not slate transfers (lending money to a friend
-// is not spending it). Income is the mirror image.
-const SPEND = "user_id = :user AND deleted_at IS NULL AND person_id IS NULL AND amount < 0";
+// is not spending it), not cash moved to the wallet (the cash lines written by
+// hand are the spending). Income is the mirror image.
+const SPEND = "user_id = :user AND deleted_at IS NULL AND person_id IS NULL AND amount < 0 AND NOT to_wallet";
 const INCOME = "user_id = :user AND deleted_at IS NULL AND person_id IS NULL AND amount > 0";
 
 export interface MonthSummary {
@@ -136,9 +138,53 @@ export async function merchants(ctx: Ctx, ym: string): Promise<Merchant[]> {
 export async function bookTotals(ctx: Ctx): Promise<{ entries: number; tracked: number; since: string | null }> {
   return (await one<{ entries: number; tracked: number; since: string | null }>(
     ctx.db,
-    `SELECT COUNT(*) AS entries, COALESCE(SUM(CASE WHEN amount < 0 THEN -amount END), 0) AS tracked,
+    `SELECT COUNT(*) AS entries, COALESCE(SUM(CASE WHEN amount < 0 AND NOT to_wallet THEN -amount END), 0) AS tracked,
        MIN(occurred_at) AS since
      FROM entries WHERE user_id = :user AND deleted_at IS NULL`,
     { user: ctx.userId },
   ))!;
+}
+
+export interface GroupReport {
+  group: TagGroup;
+  ym: string;
+  spent: number;
+  prevSpent: number;
+  count: number;
+  /** every tag in the group, the ones with spending first */
+  byTag: { tag: Tag; total: number; count: number }[];
+}
+
+/**
+ * Spending in a month read through tag groups: each group's total, split by
+ * its tags, beside the month before. A tag in two groups counts in both, so
+ * the groups need not add up to the month's spending.
+ */
+export async function groupReports(ctx: Ctx, ym: string): Promise<GroupReport[]> {
+  const [groups, tags, rows] = await Promise.all([
+    listGroups(ctx),
+    tagMap(ctx),
+    all<{ ym: string; tag_id: number; total: number; count: number }>(
+      ctx.db,
+      `SELECT substr(occurred_at, 1, 7) AS ym, tag_id, SUM(-amount) AS total, COUNT(*) AS count FROM entries
+       WHERE ${SPEND} AND tag_id IN (SELECT tag_id FROM tag_group_tags WHERE user_id = :user)
+         AND substr(occurred_at, 1, 7) IN (:ym, :prev)
+       GROUP BY 1, 2`,
+      { user: ctx.userId, ym, prev: shiftYm(ym, -1) },
+    ),
+  ]);
+  const cell = (m: string, tagId: number) => rows.find((r) => r.ym === m && r.tag_id === tagId);
+  return groups.map((group) => {
+    const byTag = group.tagIds
+      .map((id) => tags.get(id))
+      .filter((t): t is Tag => !!t)
+      .map((tag) => ({ tag, total: cell(ym, tag.id)?.total ?? 0, count: cell(ym, tag.id)?.count ?? 0 }))
+      .sort((a, b) => b.total - a.total || a.tag.name.localeCompare(b.tag.name));
+    return {
+      group, ym, byTag,
+      spent: byTag.reduce((s, t) => s + t.total, 0),
+      count: byTag.reduce((s, t) => s + t.count, 0),
+      prevSpent: group.tagIds.reduce((s, id) => s + (cell(shiftYm(ym, -1), id)?.total ?? 0), 0),
+    };
+  });
 }

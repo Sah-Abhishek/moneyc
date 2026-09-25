@@ -211,7 +211,7 @@ export async function linkEntryToPerson(ctx: Ctx, entryId: number, personId: num
     );
     if (!e) throw new NotFoundError("That line no longer exists.");
     if (e.person_id != null) throw new ConflictError("That line is already on the slate.");
-    await run(ctx.db, "UPDATE entries SET person_id = ?, tag_id = NULL, updated_at = ?, version = version + 1 WHERE id = ? AND user_id = ?", [personId, nowUtc(), entryId, ctx.userId]);
+    await run(ctx.db, "UPDATE entries SET person_id = ?, tag_id = NULL, to_wallet = FALSE, updated_at = ?, version = version + 1 WHERE id = ? AND user_id = ?", [personId, nowUtc(), entryId, ctx.userId]);
     await run(ctx.db, "INSERT INTO slate_lines (user_id, person_id, occurred_at, amount, note, entry_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [
       ctx.userId, personId, e.occurred_at, -e.amount, note, entryId, nowUtc(),
     ]);

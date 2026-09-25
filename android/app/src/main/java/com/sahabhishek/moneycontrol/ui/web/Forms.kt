@@ -35,10 +35,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -108,6 +111,8 @@ fun WebInput(
   )
 }
 
+enum class Chevron { Native, Ochre, None }
+
 /** One choice in a [WebSelect]; `group` headers mirror the web's <optgroup>. */
 data class Option<T>(val value: T, val label: String, val group: String? = null)
 
@@ -125,6 +130,8 @@ fun <T> WebSelect(
   look: Modifier? = null,
   /** show the chosen value in capitals (stamps), as CSS text-transform does */
   uppercase: Boolean = false,
+  /** the arrow: the browser's dark one (default), the slip's ochre "pick a tag" one, or none */
+  chevron: Chevron = Chevron.Native,
 ) {
   val c = Ledger.colors
   var open by remember { mutableStateOf(false) }
@@ -145,7 +152,11 @@ fun <T> WebSelect(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
       )
-      Image(painterResource(R.drawable.ic_chevron_down), null, Modifier.size(9.dp))
+      when (chevron) {
+        Chevron.Native -> Image(painterResource(R.drawable.ic_chevron_down), null, Modifier.size(9.dp), colorFilter = ColorFilter.tint(c.inkBase))
+        Chevron.Ochre -> Image(painterResource(R.drawable.ic_chevron_down), null, Modifier.size(9.dp))
+        Chevron.None -> Unit
+      }
     }
     DropdownMenu(open, { open = false }, containerColor = c.paperRaised) {
       var lastGroup: String? = null
@@ -202,5 +213,33 @@ fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit, modifier: Mo
     ) {
       Box(Modifier.width(14.dp).heightIn(min = 13.dp).background(if (on) c.paperBase else c.inkBase))
     }
+  }
+}
+
+/** .field — a small faint label over its control (tags, rules, slate forms). */
+@Composable
+fun LabeledField(label: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) =
+  Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Text(label.uppercase(), style = mono(9.sp, FontWeight.Medium, 0.14), color = Ledger.colors.inkFaint)
+    content()
+  }
+
+/** TagEditor.tsx ColorPicker: 26px squares — colour, a 2px paper ring, and an ink ring when chosen. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ColorPicker(selected: String, onSelect: (String) -> Unit) {
+  val c = Ledger.colors
+  FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    listOf("spend" to "Vermillion", "ink" to "Ink", "pending" to "Ochre", "plum" to "Plum", "teal" to "Teal", "indigo" to "Indigo", "credit" to "Green", "faint" to "Stone")
+      .forEach { (name, label) ->
+        val tone = c.stamp(name)
+        Box(
+          Modifier.size(26.dp)
+            .background(if (name == selected) c.inkBase else tone)
+            .padding(2.dp).background(c.paperBase).padding(2.dp).background(tone)
+            .selectable(name == selected, role = Role.RadioButton) { onSelect(name) }
+            .semantics { contentDescription = label },
+        )
+      }
   }
 }

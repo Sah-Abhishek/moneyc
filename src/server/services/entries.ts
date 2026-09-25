@@ -11,7 +11,7 @@ interface EntryRow {
   id: number; occurred_at: string; payee: string; amount: number; channel: string;
   ref: string | null; account: string | null; note: string | null; tag_id: number | null;
   source: "hand" | "wire"; auto: boolean; person_id: number | null; person_name: string | null;
-  version: number; balance: number;
+  to_wallet: boolean; version: number; balance: number;
 }
 
 async function mapRows(ctx: Ctx, rows: EntryRow[]): Promise<Entry[]> {
@@ -19,32 +19,40 @@ async function mapRows(ctx: Ctx, rows: EntryRow[]): Promise<Entry[]> {
   return rows.map((r) => ({
     id: r.id, occurredAt: r.occurred_at, payee: r.payee, amount: r.amount, channel: r.channel,
     ref: r.ref, account: r.account, note: r.note, source: r.source, auto: r.auto,
-    personId: r.person_id, personName: r.person_name, version: r.version, balance: r.balance,
+    personId: r.person_id, personName: r.person_name, toWallet: r.to_wallet, version: r.version, balance: r.balance,
     tag: r.tag_id == null ? null : tags.get(r.tag_id) ?? null,
   }));
 }
 
 // The running balance covers the whole book (every live line, in time order),
-// so it is computed before any month/filter/search narrowing.
+// so it is computed before any month/filter/search narrowing. Cash moved to
+// the wallet doesn't lower it: the cash lines written by hand do.
 const BOOK = `
   WITH book AS (
     SELECT e.*, p.name AS person_name,
-      SUM(e.amount) OVER (ORDER BY e.occurred_at, e.id ROWS UNBOUNDED PRECEDING) AS balance
+      SUM(CASE WHEN e.to_wallet THEN 0 ELSE e.amount END) OVER (ORDER BY e.occurred_at, e.id ROWS UNBOUNDED PRECEDING) AS balance
     FROM entries e LEFT JOIN people p ON p.id = e.person_id
     WHERE e.user_id = :user AND e.deleted_at IS NULL
   )`;
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-export async function listEntries(ctx: Ctx, opts: { ym: string; filter: LedgerFilter; q?: string; tagId?: number | null; page: number }) {
+export async function listEntries(
+  ctx: Ctx,
+  opts: { ym: string; filter: LedgerFilter; q?: string; tagId?: number | null; groupId?: number | null; page: number },
+) {
   const where = ["substr(occurred_at, 1, 7) = :ym"];
   const params: Record<string, string | number> = { user: ctx.userId, ym: opts.ym };
   if (opts.filter === "wire") where.push("source = 'wire'");
   if (opts.filter === "hand") where.push("source = 'hand'");
-  if (opts.filter === "untagged") where.push("tag_id IS NULL AND amount < 0 AND person_id IS NULL");
+  if (opts.filter === "untagged") where.push("tag_id IS NULL AND amount < 0 AND person_id IS NULL AND NOT to_wallet");
   if (opts.tagId != null) {
     where.push("tag_id = :tag");
     params.tag = opts.tagId;
+  }
+  if (opts.groupId != null) {
+    where.push("tag_id IN (SELECT tag_id FROM tag_group_tags WHERE group_id = :group AND user_id = :user)");
+    params.group = opts.groupId;
   }
   if (opts.q) {
     where.push("(payee ILIKE :q ESCAPE '\\' OR note ILIKE :q ESCAPE '\\' OR ref ILIKE :q ESCAPE '\\' OR account ILIKE :q ESCAPE '\\')");
@@ -71,10 +79,10 @@ export async function hasAnyEntries(ctx: Ctx): Promise<boolean> {
   return !!await one(ctx.db, "SELECT 1 FROM entries WHERE user_id = ? AND deleted_at IS NULL LIMIT 1", [ctx.userId]);
 }
 
-/** The blank first line of the ledger: payee + amount (+ optional tag), dated now, paid in cash. */
+/** The blank first line of the ledger: payee + amount (+ optional tag and way paid, Cash by default), dated now. */
 export function addQuickEntry(
   ctx: Ctx,
-  input: { payee: string; amount: { incoming: boolean; raw: number }; tagId: number | null; clientKey: string },
+  input: { payee: string; amount: { incoming: boolean; raw: number }; tagId: number | null; channel?: EntryInput["channel"]; clientKey: string },
 ): Promise<{ entry: Entry; duplicate: boolean }> {
   return addEntry(
     ctx,
@@ -83,9 +91,11 @@ export function addQuickEntry(
       amount: input.amount.raw,
       direction: input.amount.incoming ? "in" : "out",
       occurredAt: wallClock(ctx.tz),
-      channel: "Cash",
+      channel: input.channel ?? "Cash",
       tagId: input.tagId,
       note: null,
+      ref: null,
+      toWallet: false,
     },
     input.clientKey,
   );
@@ -103,10 +113,10 @@ export function addEntry(ctx: Ctx, input: EntryInput, clientKey: string): Promis
     const now = nowUtc();
     const id = await insertId(
       ctx.db,
-      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, note, tag_id, source, client_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'hand', ?, ?, ?)`,
+      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, note, tag_id, to_wallet, source, client_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'hand', ?, ?, ?)`,
       [ctx.userId, input.occurredAt, input.payee, input.direction === "in" ? input.amount : -input.amount,
-        input.channel, input.note, input.tagId, clientKey, now, now],
+        input.channel, input.ref, input.note, input.tagId, input.toWallet, clientKey, now, now],
     );
     return { entry: await getEntry(ctx, id), duplicate: false };
   });
@@ -126,11 +136,16 @@ export function updateEntry(ctx: Ctx, id: number, input: EntryInput, expectedVer
     const amount = input.direction === "in" ? input.amount : -input.amount;
     if (current.personId != null && Math.sign(amount) !== Math.sign(current.amount))
       throw new UserError("This line is on the slate. Change its direction from the person's account instead.");
+    if (current.personId != null && input.toWallet)
+      throw new UserError("This line is on the slate, so it can't also be cash moved to your wallet.");
+    // A hand-written line's reference is its cheque number; a line from the
+    // wire keeps the bank's reference whatever the channel is changed to.
+    const ref = current.source === "wire" ? current.ref : input.ref;
     await run(
       ctx.db,
-      `UPDATE entries SET occurred_at = ?, payee = ?, amount = ?, channel = ?, note = ?, tag_id = ?, updated_at = ?, version = version + 1,
-         corrected = auto WHERE id = ? AND user_id = ?`,
-      [input.occurredAt, input.payee, amount, input.channel, input.note, input.tagId, nowUtc(), id, ctx.userId],
+      `UPDATE entries SET occurred_at = ?, payee = ?, amount = ?, channel = ?, ref = ?, note = ?, tag_id = ?, to_wallet = ?, updated_at = ?,
+         version = version + 1, corrected = auto WHERE id = ? AND user_id = ?`,
+      [input.occurredAt, input.payee, amount, input.channel, ref, input.note, input.tagId, input.toWallet, nowUtc(), id, ctx.userId],
     );
     // A ledger line that moved money on the slate keeps the slate in step.
     await run(ctx.db, "UPDATE slate_lines SET amount = ?, occurred_at = ? WHERE entry_id = ? AND user_id = ?", [-amount, input.occurredAt, id, ctx.userId]);
@@ -161,17 +176,31 @@ export function restoreEntry(ctx: Ctx, id: number): Promise<Entry> {
   });
 }
 
-/** Lines that look like the same payment: same amount within a day, or the same bank reference. */
-export async function findLikelyDuplicate(ctx: Ctx, p: { amount: number; occurredAt: string; ref: string | null }): Promise<Entry | null> {
+/**
+ * Lines that look like the same payment: the same bank reference, or the same
+ * amount within a day. A cheque clears days after it was written, so a
+ * cheque mail also matches a hand-written cheque line for that amount from
+ * up to 45 days before, unless the two carry different cheque numbers.
+ */
+export async function findLikelyDuplicate(
+  ctx: Ctx,
+  p: { amount: number; occurredAt: string; ref: string | null; cheque?: boolean },
+): Promise<Entry | null> {
   const row = await one<{ id: number }>(
     ctx.db,
     `SELECT id FROM entries
      WHERE user_id = :user AND deleted_at IS NULL AND (
        (:ref::text IS NOT NULL AND ref = :ref::text) OR
-       (amount = :amount::bigint AND abs(substr(occurred_at, 1, 10)::date - substr(:at::text, 1, 10)::date) <= 1)
+       -- Same amount within a day, unless both carry a bank reference: two different
+       -- references are two different payments (two ₹1 UPI transfers to the same person).
+       (amount = :amount::bigint AND abs(substr(occurred_at, 1, 10)::date - substr(:at::text, 1, 10)::date) <= 1
+         AND (ref IS NULL OR :ref::text IS NULL)) OR
+       (:cheque::boolean AND channel = 'Cheque' AND source = 'hand' AND amount = :amount::bigint
+         AND substr(:at::text, 1, 10)::date - substr(occurred_at, 1, 10)::date BETWEEN -1 AND 45
+         AND (ref IS NULL OR :ref::text IS NULL OR ref = :ref::text))
      )
      ORDER BY COALESCE(ref = :ref::text, FALSE) DESC, abs(extract(epoch FROM occurred_at::timestamp - :at::text::timestamp)), id LIMIT 1`,
-    { user: ctx.userId, ref: p.ref, amount: p.amount, at: p.occurredAt },
+    { user: ctx.userId, ref: p.ref, amount: p.amount, at: p.occurredAt, cheque: p.cheque ?? false },
   );
   return row ? getEntry(ctx, row.id) : null;
 }

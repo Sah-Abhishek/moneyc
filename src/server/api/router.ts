@@ -16,12 +16,13 @@ import { createRule, deleteRule, listRules, moveRule, updateRule } from "../serv
 import {
   addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, listAccounts, openAccount, remind, setArchived, slateStats, unlinkEntry, updatePerson,
 } from "../services/slate.ts";
-import { bookTotals, merchants, monthlySpend, monthSummary, type Range } from "../services/summary.ts";
+import { bookTotals, groupReports, merchants, monthlySpend, monthSummary, type Range } from "../services/summary.ts";
+import { createGroup, deleteGroup, getGroup, listGroups, updateGroup } from "../services/tagGroups.ts";
 import { createTag, deleteTag, listTags, mergeTags, saveBudgets, tagUsage, updateTag } from "../services/tags.ts";
 import { closeAccount, getUser, setAutoFile, setMailSenders, updateSettings, upsertGoogleUser, type User } from "../services/users.ts";
 import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail, waitingCount, wireStats } from "../services/wire.ts";
 import {
-  amountField, entryInput, idField, mailSendersInput, parseBudgets, parseInput, personInput, quickEntryInput, ruleInput, settingsInput, slateLineInput, tagInput,
+  amountField, cashChoice, entryInput, idField, mailSendersInput, parseBudgets, parseInput, personInput, quickEntryInput, ruleInput, settingsInput, slateLineInput, tagGroupInput, tagInput,
 } from "../validation.ts";
 
 // JSON API for the Android app: /api/v1/…
@@ -149,15 +150,17 @@ on("GET", "entries", async (c) => {
   const filter: LedgerFilter = LEDGER_FILTERS.find((f) => f === c.query.get("filter")) ?? "all";
   const q = c.query.get("q")?.trim().slice(0, 100) || undefined;
   const tag = c.query.get("tag") ? field("tag", idField("Tag"), c.query.get("tag")) : null;
+  const group = c.query.get("group") ? field("group", idField("Group"), c.query.get("group")) : null;
+  if (group != null) await getGroup(c.ctx, group);
   const page = Math.max(1, Math.min(10_000, Number.parseInt(c.query.get("page") ?? "1", 10) || 1));
   const ym = month(c);
-  return { data: { ym, filter, q: q ?? null, tagId: tag, ...(await listEntries(c.ctx, { ym, filter, q, tagId: tag, page })) } };
+  return { data: { ym, filter, q: q ?? null, tagId: tag, groupId: group, ...(await listEntries(c.ctx, { ym, filter, q, tagId: tag, groupId: group, page })) } };
 });
 
 on("GET", "entries/:id", async (c) => ({ data: await getEntry(c.ctx, id(c, "Line")) }));
 
 const entryFields = (b: Record<string, unknown>) =>
-  ({ ...Object.fromEntries(["payee", "direction", "occurredAt", "channel", "tagId", "note"].map((k) => [k, b[k] ?? undefined])), amount: str(b.amount) });
+  ({ ...Object.fromEntries(["payee", "direction", "occurredAt", "channel", "tagId", "note", "chequeNo", "cash"].map((k) => [k, b[k] ?? undefined])), amount: str(b.amount) });
 
 on("POST", "entries", async (c) => {
   const input = parseInput(entryInput, entryFields(c.body));
@@ -168,7 +171,9 @@ on("POST", "entries", async (c) => {
 
 // The one-line form: "+2500" is money in.
 on("POST", "entries/quick", async (c) => {
-  const input = parseInput(quickEntryInput, { payee: c.body.payee, amount: str(c.body.amount), tagId: c.body.tagId ?? "", clientKey: c.body.clientKey });
+  const input = parseInput(quickEntryInput, {
+    payee: c.body.payee, amount: str(c.body.amount), tagId: c.body.tagId ?? "", channel: c.body.channel, clientKey: c.body.clientKey,
+  });
   const { entry, duplicate } = await addQuickEntry(c.ctx, input);
   return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
 });
@@ -231,6 +236,7 @@ on("POST", "wire/:id/file", async (c) => {
     amount: editing ? field("amount", amountField, str(c.body.amount)) : null,
     tagId: c.body.tagId == null || c.body.tagId === "" ? null : field("tagId", idField("Tag"), c.body.tagId),
     personId,
+    cash: c.body.cash == null || c.body.cash === "" ? null : field("cash", cashChoice, c.body.cash),
   });
   return { status: 201, data: entry, message: personId ? `Put ${entry.payee} on the slate.` : `Filed ${entry.payee}.` };
 });
@@ -295,6 +301,29 @@ on("DELETE", "tags/:id", async (c) => {
 on("POST", "tags/:id/merge", async (c) => {
   const r = await mergeTags(c.ctx, id(c, "Tag"), field("into", idField("Tag to merge into"), c.body.into));
   return { data: r, message: `Merged. ${r.moved} line${r.moved === 1 ? "" : "s"} moved.` };
+});
+
+// Tag groups: named sets of spending tags ("Health": Healthy, Junk, Leisure).
+const groupFields = (b: Record<string, unknown>) => ({ name: b.name, tagIds: b.tagIds });
+
+on("GET", "tag-groups", async (c) => {
+  const [groups, tags] = await Promise.all([listGroups(c.ctx), listTags(c.ctx)]);
+  return { data: { groups, tags } };
+});
+
+on("POST", "tag-groups", async (c) => {
+  const group = await createGroup(c.ctx, parseInput(tagGroupInput, groupFields(c.body)));
+  return { status: 201, data: group, message: `Added the ${group.name} group.` };
+});
+
+on("PUT", "tag-groups/:id", async (c) => {
+  const group = await updateGroup(c.ctx, id(c, "Group"), parseInput(tagGroupInput, groupFields(c.body)));
+  return { data: group, message: `Saved ${group.name}.` };
+});
+
+on("DELETE", "tag-groups/:id", async (c) => {
+  await deleteGroup(c.ctx, id(c, "Group"));
+  return { message: "Group deleted. Its tags and lines are unchanged." };
 });
 
 on("GET", "budgets", async (c) => {
@@ -404,8 +433,10 @@ on("POST", "slate/:id/remind", async (c) => ({ data: await remind(c.ctx, id(c, "
 on("GET", "reports", async (c) => {
   const ym = month(c);
   const range = RANGES.find((r) => r === c.query.get("range")) ?? "6m";
-  const [summary, months, merchantList] = await Promise.all([monthSummary(c.ctx, ym, c.user.monthlyBudget), monthlySpend(c.ctx, ym, range), merchants(c.ctx, ym)]);
-  return { data: { ym, range, summary, months, merchants: merchantList } };
+  const [summary, months, merchantList, groups] = await Promise.all([
+    monthSummary(c.ctx, ym, c.user.monthlyBudget), monthlySpend(c.ctx, ym, range), merchants(c.ctx, ym), groupReports(c.ctx, ym),
+  ]);
+  return { data: { ym, range, summary, months, merchants: merchantList, groups } };
 });
 
 // ─── settings & account ─────────────────────────────────────────────────────

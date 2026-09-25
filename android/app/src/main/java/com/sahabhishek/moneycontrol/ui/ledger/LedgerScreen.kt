@@ -58,6 +58,8 @@ fun LedgerScreen(shell: ShellState, nav: Nav, vm: LedgerViewModel, requested: Le
           LedgerList(
             page = entries,
             query = query,
+            groups = state.groups,
+            tags = state.tags,
             currentYm = currentYm,
             bookIsEmpty = !shell.me.hasEntries,
             quick = state.quick,
@@ -66,7 +68,7 @@ fun LedgerScreen(shell: ShellState, nav: Nav, vm: LedgerViewModel, requested: Le
             onQuickAdd = vm::quickAdd,
             onAddPast = { nav.newEntry("${query.ym}-01") },
             onOpen = { nav.entry(it.id) },
-            onSlate = { nav.section(Section.Slate) },
+            onSlate = { nav.slate(it) },
           )
         }
         LongView(

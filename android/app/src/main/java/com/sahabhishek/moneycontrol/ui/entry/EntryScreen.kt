@@ -89,7 +89,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val MAIN_CHANNELS = listOf("UPI", "Card", "Cash")
+private val MAIN_CHANNELS = listOf("UPI", "Card", "Cash", "Cheque")
 private val OTHER_CHANNELS = listOf("NEFT", "IMPS", "RTGS", "ATM", "Bank")
 
 /** app/(book)/new/page.tsx and app/(book)/entries/[id]/page.tsx. */
@@ -190,14 +190,46 @@ private fun EntryForm(state: EntryState, vm: EntryViewModel, nav: Nav, isNew: Bo
           )
         }
       }
+      if (f.channel == "Cheque") {
+        FormRow("Cheque no.") {
+          if (e?.source == "wire") {
+            Text(e.ref ?: "Not in the mail", style = mono(11.sp), color = c.inkMuted)
+          } else {
+            WebInput(
+              f.chequeNo,
+              { v -> vm.edit { it.copy(chequeNo = v) } },
+              placeholder = "Optional · e.g. 000123",
+              monoFace = true,
+              invalid = err["chequeNo"] != null,
+              keyboardType = KeyboardType.Number,
+              maxLength = 12,
+            )
+          }
+          Hint("When the bank mails that the cheque has cleared, it's matched to this line instead of being counted again.")
+          FieldError(err["chequeNo"])
+        }
+      }
+      if (f.cashOut) {
+        FormRow("This cash") {
+          Segmented(listOf("wallet" to "Log each spend", "spent" to "Count as spent"), f.cash, { v -> vm.edit { it.copy(cash = v) } })
+          Hint(
+            when (f.cash) {
+              "wallet" -> "The withdrawal only moves money to your wallet: it isn't counted as spending, and the cash lines you write down are."
+              "spent" -> "The whole amount counts as spent today. Don't also write down what you buy with it, or it's counted twice."
+              else -> "Writing down each cash spend? Then the withdrawal itself isn't spending."
+            },
+          )
+          FieldError(err["cash"])
+        }
+      }
       if (e?.personId != null) {
         FormRow("On the slate") {
           FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            Stamp(e.personName.orEmpty(), "ink", onClick = { nav.section(Section.Slate) })
+            Stamp(e.personName.orEmpty(), "ink", onClick = { nav.slate(e.personId) })
             Btn("Take off the slate", vm::takeOffSlate)
           }
         }
-      } else {
+      } else if (!f.toWallet) {
         FormRow("Tag") {
           WebSelect(tagOptions(state.tags), f.tagId, { t -> vm.edit { it.copy(tagId = t) } })
           FieldError(err["tagId"])
@@ -245,7 +277,7 @@ private val SHOWN = DateTimeFormatter.ofPattern("MM/dd/yyyy, hh:mm a", Locale.US
 /** <input type="datetime-local">: shows "09/25/2026, 03:57 PM"; tapping opens the date, then the time. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateTimeField(value: String, invalid: Boolean, onChange: (String) -> Unit) {
+fun DateTimeField(value: String, invalid: Boolean, onChange: (String) -> Unit) {
   val c = Ledger.colors
   val current = runCatching { LocalDateTime.parse(value.take(16)) }.getOrNull() ?: LocalDateTime.now().withSecond(0).withNano(0)
   var step by rememberSaveable { mutableStateOf(0) } // 0 closed, 1 date, 2 time

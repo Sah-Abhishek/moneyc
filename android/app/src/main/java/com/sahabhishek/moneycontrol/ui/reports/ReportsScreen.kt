@@ -7,7 +7,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -84,18 +92,25 @@ class ReportsViewModel(private val book: BookRepository, private val messages: M
 /** app/(book)/reports/page.tsx */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ReportsScreen(shell: ShellState, nav: Nav, vm: ReportsViewModel, ym: String?, range: String) {
+fun ReportsScreen(shell: ShellState, nav: Nav, vm: ReportsViewModel, ym: String?, range: String, group: Long? = null, toGroups: Boolean = false) {
   val state by vm.state.collectAsStateWithLifecycle()
   val context = LocalContext.current
   val currentYm = shell.me?.today?.take(7)
+  val scroll = rememberScrollState()
+  var groupsTop by remember { mutableIntStateOf(-1) }
+  var anchored by rememberSaveable { mutableStateOf(false) }
   LaunchedEffect(ym, range) { vm.show(ym, range) }
+  // /reports?group=…#groups: open at the "By group" section once it's laid out.
+  LaunchedEffect(groupsTop) { if (toGroups && !anchored && groupsTop >= 0) { anchored = true; scroll.scrollTo(groupsTop) } }
 
-  Page(shell, Section.Reports, nav::section, nav::readMail, nav::reconnect) {
+  Page(shell, Section.Reports, nav::section, nav::readMail, nav::reconnect, scroll) {
     val data = state.data
     when {
       state.error != null && data == null -> ErrorPage(state.error!!, vm::load) { nav.section(Section.Ledger) }
       data == null -> LoadingPage()
       else -> {
+        // An unknown group (deleted meanwhile) shows every group rather than nothing.
+        val selected = data.groups.firstOrNull { it.group.id == group }?.group?.id
         FlowRow(
           Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = 24.dp),
           horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -103,10 +118,20 @@ fun ReportsScreen(shell: ShellState, nav: Nav, vm: ReportsViewModel, ym: String?
           itemVerticalAlignment = Alignment.CenterVertically,
         ) {
           Eyebrow("Report for ${monthTitle(data.ym)} ${data.ym.take(4)}", Modifier.padding(end = 8.dp))
-          Chip("‹ ${monthTitle(shiftYm(data.ym, -1)).take(3)}", { nav.reports(shiftYm(data.ym, -1), data.range) })
-          if (currentYm != null && data.ym < currentYm) Chip("${monthTitle(shiftYm(data.ym, 1)).take(3)} ›", { nav.reports(shiftYm(data.ym, 1), data.range) })
+          Chip("‹ ${monthTitle(shiftYm(data.ym, -1)).take(3)}", { nav.reports(shiftYm(data.ym, -1), data.range, selected) })
+          if (currentYm != null && data.ym < currentYm) Chip("${monthTitle(shiftYm(data.ym, 1)).take(3)} ›", { nav.reports(shiftYm(data.ym, 1), data.range, selected) })
         }
         FrontPage(data.summary) { nav.section(Section.Budgets) }
+        GroupReports(
+          ym = data.ym,
+          reports = data.groups,
+          selected = selected,
+          onSelect = { nav.reports(data.ym, data.range, it, toGroups = true) },
+          onMakeGroup = { nav.section(Section.Tags) },
+          onTag = { nav.ledger(LedgerQuery(data.ym, tag = it)) },
+          onLines = { nav.ledger(LedgerQuery(data.ym, group = it)) },
+          modifier = Modifier.onGloballyPositioned { groupsTop = it.positionInParent().y.toInt() },
+        )
         LongView(
           ym = data.ym,
           months = data.months,

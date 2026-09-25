@@ -67,10 +67,10 @@ project as the web client.
 | | | |
 |---|---|---|
 | GET | `summary?m=YYYY-MM` | the month: spent, received, budget, daily spend, by tag |
-| GET | `entries?m&filter&q&tag&page` | `filter`: `all` \| `wire` \| `hand` \| `untagged` → `{ entries, total, page, pages, … }` (20 a page, newest first, each with the running `balance`) |
+| GET | `entries?m&filter&q&tag&group&page` | `filter`: `all` \| `wire` \| `hand` \| `untagged`; `group`: only lines stamped with one of that tag group's tags → `{ entries, total, page, pages, … }` (20 a page, newest first, each with the running `balance`) |
 | GET | `entries/:id` | one line |
-| POST | `entries` | `{ payee, amount, direction: out\|in, occurredAt, channel, tagId?, note?, clientKey }` |
-| POST | `entries/quick` | `{ payee, amount ("+…" = in), tagId?, clientKey }` |
+| POST | `entries` | `{ payee, amount, direction: out\|in, occurredAt, channel, tagId?, note?, chequeNo?, cash?, clientKey }` |
+| POST | `entries/quick` | `{ payee, amount ("+…" = in), tagId?, channel?, clientKey }` — `channel` any but `ATM`, default `Cash` |
 | PUT | `entries/:id` | same fields as create + `version` |
 | DELETE | `entries/:id` | soft delete (undo with restore) |
 | POST | `entries/:id/restore` | |
@@ -78,15 +78,21 @@ project as the web client.
 | DELETE | `entries/:id/slate` | make it an ordinary line again |
 | GET | `export?month=YYYY-MM` | CSV file (`text/csv`) |
 
-`channel`: `UPI` `Card` `Cash` `NEFT` `IMPS` `RTGS` `ATM` `Bank`. An unknown or future `m` falls back to
+`channel`: `UPI` `Card` `Cash` `Cheque` `NEFT` `IMPS` `RTGS` `ATM` `Bank`. An unknown or future `m` falls back to
 this month.
+
+- `chequeNo` (digits, 4–12) is kept as the line's `ref` when `channel` is `Cheque`, and ignored otherwise.
+  The bank's clearing mail up to 45 days later is flagged as this same line (`duplicateOf`) instead of a new payment.
+- `cash` is required for money out over `ATM`: `wallet` = "I'll write down what I spend" (the line gets
+  `toWallet: true`, counts neither as spending nor in the balance, and carries no tag), `spent` = count it all as spent.
+- Every line carries `toWallet` (boolean).
 
 ### The wire
 | | | |
 |---|---|---|
 | GET | `wire` | `{ waiting, decided (last 30), stats, connection, sync, autoFile }` |
 | POST | `wire/sync` | `{ force? }` → `{ state: done\|busy\|too_soon, added, autoFiled, more }` |
-| POST | `wire/:id/file` | `{ tagId?, personId?, payee?, amount? }` — sending `payee`/`amount` means "edited" |
+| POST | `wire/:id/file` | `{ tagId?, personId?, payee?, amount?, cash? }` — sending `payee`/`amount` means "edited"; `cash` (`wallet`\|`spent`) is required for an ATM withdrawal, which is never filed automatically |
 | POST | `wire/:id/unfile` | undo a filing |
 | POST | `wire/:id/archive` · `wire/:id/restore` | |
 | POST | `wire/:id/duplicate` | `{ entryId }` — "it's the same one" |
@@ -100,6 +106,9 @@ this month.
 | POST · PUT | `tags` · `tags/:id` | `{ name, color, kind: spend\|income, budget? }` |
 | DELETE | `tags/:id` | |
 | POST | `tags/:id/merge` | `{ into }` |
+| GET | `tag-groups` | `{ groups: [{ id, name, tagIds }], tags }` |
+| POST · PUT | `tag-groups` · `tag-groups/:id` | `{ name, tagIds: [id, …] }` — spending tags only, at least one; a tag can be in several groups |
+| DELETE | `tag-groups/:id` | the group only; its tags and lines stay |
 | GET | `budgets?m` | `{ summary, tags, monthly }` |
 | PUT | `budgets` | `{ monthly, tags: { "<id>": "5,000" \| "" } }` — all or nothing; errors keyed `monthly` / `tag-<id>` |
 | GET | `rules` | `{ rules, tags }` |
@@ -124,7 +133,7 @@ this month.
 ### Reports and settings
 | | | |
 |---|---|---|
-| GET | `reports?m&range=6m\|1y\|all` | `{ summary, months, merchants }` |
+| GET | `reports?m&range=6m\|1y\|all` | `{ summary, months, merchants, groups }` — `groups`: per tag group `{ group, spent, prevSpent, count, byTag: [{ tag, total, count }] }` |
 | GET | `settings` | `{ user, connection, sync, bankCount }` |
 | PUT | `settings` | `{ monthlyBudget, timezone (IANA), autoFile: boolean }` |
 | PUT | `settings/auto-file` | `{ on: boolean }` |

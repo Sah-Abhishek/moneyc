@@ -42,7 +42,7 @@ export function WireStatus({ connection, lastSuccessAt, lastError, dateLabel }: 
       try {
         // A big first read arrives in batches; keep going while the server says there's more.
         for (let batch = 0; batch < 20; batch++) {
-          const r = await callAction(() => syncWireAction(force || batch > 0));
+          const r = await callAction(() => syncWireAction(force || batch > 0), { quiet: true });
           if (!r.ok) {
             setPhase("error");
             setMessage(r.error);

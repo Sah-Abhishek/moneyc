@@ -106,3 +106,19 @@ test("junk mail scores low", () => {
 test("maskRef", () => {
   assert.equal(maskRef("626412345672"), "626xxxxx72");
 });
+
+test("cheque clearing debit: channel Cheque, the cheque number is the reference", () => {
+  const p = parseBankMail(
+    "Dear Customer, Rs.25,000.00 has been debited from your A/c XX4721 on 03-10-26 towards clearing of Chq No. 000481 presented by SHARMA ESTATES.",
+  );
+  assert.equal(p.direction, "debit");
+  assert.equal(p.amountPaise, 2500000);
+  assert.equal(p.channel, "Cheque");
+  assert.equal(p.ref, "000481");
+});
+
+test("ATM withdrawal is an ATM debit", () => {
+  const p = parseBankMail("Rs.5000.00 withdrawn from A/c XX4721 at ATM on 22-09-26 at 18:02. Ref no 626455512345.");
+  assert.equal(p.direction, "debit");
+  assert.equal(p.channel, "ATM");
+});

@@ -12,7 +12,7 @@ import { useToast } from "./ui/Toaster";
 import { callAction, newKey, useSubmit } from "./ui/useSubmit";
 import s from "./EntryForm.module.css";
 
-const MAIN_CHANNELS = ["UPI", "Card", "Cash"] as const;
+const MAIN_CHANNELS = ["UPI", "Card", "Cash", "Cheque"] as const;
 
 /** The full line editor: "A new line" and editing an existing one. */
 export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entry; tags: Tag[]; defaultWhen: string; backHref: string }) {
@@ -22,6 +22,11 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
   const [dirty, setDirty] = useState(false);
   const [amount, setAmount] = useState(entry ? rupeesExact(entry.amount) : "");
   const [channel, setChannel] = useState<string>(entry?.channel ?? "UPI");
+  const [direction, setDirection] = useState<"out" | "in">(!entry || entry.amount < 0 ? "out" : "in");
+  // An ATM line that already exists had its answer given; a new one must be asked.
+  const [cash, setCash] = useState<"wallet" | "spent" | null>(entry?.channel === "ATM" && entry.amount < 0 ? (entry.toWallet ? "wallet" : "spent") : null);
+  const cashOut = channel === "ATM" && direction === "out";
+  const toWallet = cashOut && cash === "wallet";
   const [deleting, setDeleting] = useState(false);
 
   const { onSubmit, pending, error, fieldErrors } = useSubmit(entry ? updateEntryAction : createEntryAction, {
@@ -97,11 +102,11 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
           </span>
           <div className="segmented" role="radiogroup" aria-labelledby="ef-dir-label">
             <label>
-              <input type="radio" name="direction" value="out" defaultChecked={!entry || entry.amount < 0} />
+              <input type="radio" name="direction" value="out" checked={direction === "out"} onChange={() => setDirection("out")} />
               <span>Went out</span>
             </label>
             <label>
-              <input type="radio" name="direction" value="in" defaultChecked={!!entry && entry.amount > 0} />
+              <input type="radio" name="direction" value="in" checked={direction === "in"} onChange={() => setDirection("in")} />
               <span>Came in</span>
             </label>
           </div>
@@ -167,6 +172,62 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
           </div>
         </div>
 
+        {channel === "Cheque" && (
+          <div className="form-row">
+            <label htmlFor="ef-cheque">Cheque no.</label>
+            <div>
+              {entry?.source === "wire" ? (
+                <span className={s.readonly}>{entry.ref ?? "Not in the mail"}</span>
+              ) : (
+                <input
+                  id="ef-cheque"
+                  name="chequeNo"
+                  className="input mono"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  defaultValue={entry?.channel === "Cheque" ? entry.ref ?? "" : ""}
+                  maxLength={12}
+                  placeholder="Optional · e.g. 000123"
+                  aria-invalid={!!err("chequeNo") || undefined}
+                  aria-describedby={describedBy("chequeNo") ?? "ef-cheque-hint"}
+                />
+              )}
+              <p className="hint" id="ef-cheque-hint">
+                When the bank mails that the cheque has cleared, it&apos;s matched to this line instead of being counted again.
+              </p>
+              <FieldError id="err-chequeNo" message={err("chequeNo")} />
+            </div>
+          </div>
+        )}
+
+        {cashOut && (
+          <div className="form-row">
+            <span className="form-label" id="ef-cash-label">
+              This cash
+            </span>
+            <div>
+              <div className="segmented" role="radiogroup" aria-labelledby="ef-cash-label" aria-describedby={describedBy("cash")}>
+                <label>
+                  <input type="radio" name="cash" value="wallet" checked={cash === "wallet"} onChange={() => setCash("wallet")} />
+                  <span>Log each spend</span>
+                </label>
+                <label>
+                  <input type="radio" name="cash" value="spent" checked={cash === "spent"} onChange={() => setCash("spent")} />
+                  <span>Count as spent</span>
+                </label>
+              </div>
+              <p className="hint">
+                {cash === "wallet"
+                  ? "The withdrawal only moves money to your wallet: it isn't counted as spending, and the cash lines you write down are."
+                  : cash === "spent"
+                    ? "The whole amount counts as spent today. Don't also write down what you buy with it, or it's counted twice."
+                    : "Writing down each cash spend? Then the withdrawal itself isn't spending."}
+              </p>
+              <FieldError id="err-cash" message={err("cash")} />
+            </div>
+          </div>
+        )}
+
         {entry?.personId ? (
           <div className="form-row">
             <span className="form-label">On the slate</span>
@@ -187,7 +248,7 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               </button>
             </div>
           </div>
-        ) : (
+        ) : toWallet ? null : (
           <div className="form-row">
             <label htmlFor="ef-tag">Tag</label>
             <div>

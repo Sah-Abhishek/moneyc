@@ -51,7 +51,7 @@ class GoogleAuth(private val webClientId: String) {
       }
     } catch (e: ApiException) {
       Log.w(TAG, "authorize failed: ${e.statusCode}", e)
-      Step.Failed(reasonFor(e.statusCode))
+      Step.Failed(reasonFor(e))
     } catch (e: Exception) {
       Log.w(TAG, "authorize failed", e)
       Step.Failed(Reason.NoPlayServices)
@@ -64,8 +64,12 @@ class GoogleAuth(private val webClientId: String) {
     result.serverAuthCode?.let { Step.Code(it) } ?: Step.Failed(Reason.Unknown)
   } catch (e: ApiException) {
     Log.w(TAG, "consent failed: ${e.statusCode}", e)
-    Step.Failed(reasonFor(e.statusCode))
+    Step.Failed(reasonFor(e))
   }
+
+  // UNREGISTERED_ON_API_CONSOLE: no Android OAuth client for this package + signing key.
+  private fun reasonFor(e: ApiException) =
+    if (e.message?.contains("UNREGISTERED_ON_API_CONSOLE") == true) Reason.NotConfigured else reasonFor(e.statusCode)
 
   private fun reasonFor(status: Int) = when (status) {
     CommonStatusCodes.CANCELED -> Reason.Cancelled

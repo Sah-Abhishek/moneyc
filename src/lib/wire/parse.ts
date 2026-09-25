@@ -7,7 +7,7 @@
 // timestamp. Each extractor is independent so a slip can show exactly which
 // fields were found — the wire is a desk, not a feed.
 
-export type Channel = "UPI" | "NEFT" | "IMPS" | "RTGS" | "Card" | "ATM" | "Other";
+export type Channel = "UPI" | "NEFT" | "IMPS" | "RTGS" | "Cheque" | "Card" | "ATM" | "Other";
 
 export interface ParsedMail {
   direction: "debit" | "credit" | null;
@@ -61,6 +61,7 @@ function parseChannel(text: string): Channel {
   if (/\bNEFT\b/i.test(text)) return "NEFT";
   if (/\bIMPS\b/i.test(text)) return "IMPS";
   if (/\bRTGS\b/i.test(text)) return "RTGS";
+  if (/\b(?:cheque|chq|check\s+no)\b/i.test(text)) return "Cheque";
   if (/\bATM\b/i.test(text)) return "ATM";
   if (/\b(credit|debit)\s+card\b|\bcard\s+(?:no\.?|ending|xx)/i.test(text)) return "Card";
   return "Other";
@@ -69,6 +70,12 @@ function parseChannel(text: string): Channel {
 function parseRef(text: string): string | null {
   const m =
     text.match(/(?:UPI\s+)?(?:transaction\s+)?(?:reference|ref|RRN|UTR)(?:\s+(?:number|no\.?))?\s*(?:is|:|-)?\s*([A-Z0-9]{6,22})/i);
+  return m ? m[1] : null;
+}
+
+/** "Chq No. 000123", "cheque number 481205", "CHQ 481205" */
+function parseChequeNo(text: string): string | null {
+  const m = text.match(/\b(?:cheque|chq|check)(?:\s+(?:no\.?|number|#))?\s*[:.#\-]?\s*(\d{4,12})\b/i);
   return m ? m[1] : null;
 }
 
@@ -126,12 +133,14 @@ function parsePostedAt(text: string): string | null {
 export function parseBankMail(body: string): ParsedMail {
   const text = body.replace(/\s+/g, " ").trim();
   const direction = parseDirection(text);
+  const channel = parseChannel(text);
   const parsed = {
     direction,
     amountPaise: parseAmount(text),
     payee: parsePayee(text, direction),
-    channel: parseChannel(text),
-    ref: parseRef(text),
+    channel,
+    // A cheque is known by its number: that's what the hand-written line carries.
+    ref: (channel === "Cheque" ? parseChequeNo(text) : null) ?? parseRef(text),
     account: parseAccount(text),
     postedAt: parsePostedAt(text),
   };

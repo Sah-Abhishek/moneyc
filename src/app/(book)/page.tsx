@@ -10,6 +10,7 @@ import { requireUser, wireConnection } from "@/server/app";
 import { hasAnyEntries, listEntries } from "@/server/services/entries";
 import { listRules } from "@/server/services/rules";
 import { merchants, monthlySpend, monthSummary } from "@/server/services/summary";
+import { listGroups } from "@/server/services/tagGroups";
 import { listTags } from "@/server/services/tags";
 import { listSlips, wireStats } from "@/server/services/wire";
 import s from "./page.module.css";
@@ -30,12 +31,15 @@ export default async function LedgerPage({ searchParams }: PageProps<"/">) {
   const page = Math.max(1, Math.min(10_000, Number.parseInt(one(sp.page) ?? "1", 10) || 1));
 
   const tagsP = listTags(ctx);
-  const ledgerP = tagsP.then((tags) => {
+  const groupsP = listGroups(ctx);
+  // An unknown tag or group (deleted, another user's) is ignored, not an error.
+  const ledgerP = Promise.all([tagsP, groupsP]).then(([tags, groups]) => {
     const tag = tags.find((t) => String(t.id) === one(sp.tag)) ?? null;
-    return listEntries(ctx, { ym, filter, q, tagId: tag?.id ?? null, page }).then((ledger) => ({ tag, ledger }));
+    const group = groups.find((g) => String(g.id) === one(sp.group)) ?? null;
+    return listEntries(ctx, { ym, filter, q, tagId: tag?.id ?? null, groupId: group?.id ?? null, page }).then((ledger) => ({ tag, group, ledger }));
   });
-  const [summary, tags, { tag, ledger }, slips, connection, bookHasEntries, stats, rules, months, merchantList] = await Promise.all([
-    monthSummary(ctx, ym, user.monthlyBudget), tagsP, ledgerP, listSlips(ctx, "waiting"), wireConnection(user.id),
+  const [summary, tags, groups, { tag, group, ledger }, slips, connection, bookHasEntries, stats, rules, months, merchantList] = await Promise.all([
+    monthSummary(ctx, ym, user.monthlyBudget), tagsP, groupsP, ledgerP, listSlips(ctx, "waiting"), wireConnection(user.id),
     hasAnyEntries(ctx), wireStats(ctx), listRules(ctx), monthlySpend(ctx, ym, "6m"), merchants(ctx, ym),
   ]);
 
@@ -51,6 +55,8 @@ export default async function LedgerPage({ searchParams }: PageProps<"/">) {
             filter={filter}
             q={q}
             tag={tag}
+            group={group}
+            groups={groups}
             ym={ym}
             currentYm={currentYm}
             today={dayMonth(now)}

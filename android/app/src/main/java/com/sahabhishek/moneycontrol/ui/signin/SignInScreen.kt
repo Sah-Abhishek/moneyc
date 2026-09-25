@@ -75,7 +75,7 @@ fun SignInScreen(vm: SignInViewModel) {
   var notesTop by remember { mutableIntStateOf(0) }
   val today = LocalDateTime.now(ZoneId.of("Asia/Kolkata")).withNano(0).toString()
 
-  Column(Modifier.fillMaxSize().background(c.paperBase).verticalScroll(scroll).statusBarsPadding().navigationBarsPadding()) {
+  Column(Modifier.fillMaxSize().background(c.paperBase).verticalScroll(scroll)) {
     // The cover
     Column(Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = 22.dp)) {
       Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {

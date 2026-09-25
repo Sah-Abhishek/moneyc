@@ -75,7 +75,7 @@ async function toSlip(ctx: Ctx, r: MailRow, refs: WireRefs): Promise<WireSlip> {
   const signed = parsed.amountPaise == null ? null : parsed.direction === "credit" ? parsed.amountPaise : -parsed.amountPaise;
   const [suggestion, duplicateOf, person] = await Promise.all([
     suggestTag(ctx, parsed.payee, verdict.tagId, refs.tags),
-    r.status === "waiting" && signed != null ? findLikelyDuplicate(ctx, { amount: signed, occurredAt, ref: parsed.ref }) : null,
+    r.status === "waiting" && signed != null ? findLikelyDuplicate(ctx, { amount: signed, occurredAt, ref: parsed.ref, cheque: parsed.channel === "Cheque" }) : null,
     r.status === "waiting" ? matchPerson(ctx, parsed.payee, refs.accounts) : null,
   ]);
   const tagCertainty = suggestion ? (suggestion.basis.includes("rule") ? 1 : 0.95) : 0;
@@ -139,6 +139,11 @@ export interface FileOptions {
   tagId: number | null;
   /** put the payment on this person's slate instead of treating it as spending/income */
   personId?: number | null;
+  /**
+   * cash from an ATM: "wallet" = the owner will write down what they spend it
+   * on; "spent" = count it all as spent now. Required for ATM withdrawals.
+   */
+  cash?: "wallet" | "spent" | null;
   auto?: boolean;
 }
 
@@ -151,20 +156,25 @@ export function fileMail(ctx: Ctx, mailId: number, opts: FileOptions, refs?: Wir
     if (!payee) throw new UserError("Add the payee before filing — the mail didn't say who it was.", { payee: "Who was it?" });
     if (!amount) throw new UserError("Add the amount before filing — it couldn't be read from the mail.", { amount: "How much?" });
     if (!slip.parsed.direction) throw new UserError("The mail doesn't say whether money went out or came in. Add it by hand instead.");
-    if (!opts.personId) await assertTag(ctx, opts.tagId);
+    const atm = isCashWithdrawal(slip.parsed);
+    if (atm && !opts.personId && !opts.cash)
+      throw new UserError("Choose how this cash should count: written down spend by spend, or spent all at once.", { cash: "Choose one" });
+    const toWallet = atm && !opts.personId && opts.cash === "wallet";
+    const tagId = opts.personId || toWallet ? null : opts.tagId;
+    if (tagId != null) await assertTag(ctx, tagId);
 
     await claim(ctx, mailId, "waiting", "filed");
     const bankShort = slip.bank.split(" ")[0].toUpperCase();
     const now = nowUtc();
     const id = await insertId(
       ctx.db,
-      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, account, tag_id, source, auto, mail_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'wire', ?, ?, ?, ?)`,
+      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, account, tag_id, to_wallet, source, auto, mail_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wire', ?, ?, ?, ?)`,
       [
         ctx.userId, slip.occurredAt, payee, slip.parsed.direction === "credit" ? amount : -amount,
         slip.parsed.channel === "Other" ? "Bank" : slip.parsed.channel, slip.parsed.ref,
         slip.parsed.account ? `${bankShort} ****${slip.parsed.account}` : null,
-        opts.personId ? null : opts.tagId, opts.auto ?? false, mailId, now, now,
+        tagId, toWallet, opts.auto ?? false, mailId, now, now,
       ],
     );
     if (opts.personId) {
@@ -173,6 +183,11 @@ export function fileMail(ctx: Ctx, mailId: number, opts: FileOptions, refs?: Wir
     }
     return getEntry(ctx, id);
   });
+}
+
+/** Money out at an ATM: whether it's spending depends on the owner, so it's always asked. */
+export function isCashWithdrawal(p: ParsedMail): boolean {
+  return p.channel === "ATM" && p.direction === "debit";
 }
 
 /**
@@ -241,6 +256,7 @@ export async function markDuplicate(ctx: Ctx, mailId: number, entryId: number) {
  *  - a tag is known (rule or history), or a rule says "file"
  *  - it doesn't look like a line already in the ledger
  *  - it isn't money moving between you and someone on the slate
+ *  - it isn't cash from an ATM (whether that's spending is the owner's call)
  */
 export async function tryAutoFile(ctx: Ctx, mailId: number, autoFileSetting: boolean, refs?: WireRefs): Promise<boolean> {
   refs ??= await loadWireRefs(ctx);
@@ -250,7 +266,7 @@ export async function tryAutoFile(ctx: Ctx, mailId: number, autoFileSetting: boo
   const p = slip.parsed;
   const complete = p.amountPaise != null && p.direction != null && p.payee != null && p.postedAt != null;
   const allowed = (autoFileSetting && slip.suggestion != null) || verdict.file;
-  if (verdict.ask || !complete || !allowed || slip.duplicateOf || slip.person) return false;
+  if (verdict.ask || !complete || !allowed || slip.duplicateOf || slip.person || isCashWithdrawal(p)) return false;
   try {
     await fileMail(ctx, mailId, { tagId: slip.suggestion?.tag.id ?? null, auto: true }, refs);
     return true;

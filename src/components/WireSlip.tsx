@@ -24,6 +24,9 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [mode, setMode] = useState<"slate" | "ledger">(slip.person ? "slate" : "ledger");
   const [dismissedDuplicate, setDismissedDuplicate] = useState(false);
+  // Cash from an ATM: spending only if the owner won't write down what it buys. Always asked.
+  const atm = p.channel === "ATM" && p.direction === "debit";
+  const [cash, setCash] = useState<"wallet" | "spent" | null>(null);
 
   const { onSubmit, pending, error, fieldErrors } = useSubmit(fileSlipAction, {
     onSuccess: (r) =>
@@ -49,7 +52,7 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
     else toast({ tone: "info", message: r.message ?? "Done.", action: undo ? { label: "Undo", run: async () => void (await undo()) } : undefined });
   }
 
-  const needsReview = !slip.suggestion || slip.confidence < 0.8 || slip.askFirst;
+  const needsReview = !slip.suggestion || slip.confidence < 0.8 || slip.askFirst || atm;
   const tone = slip.confidence >= 0.9 ? "credit" : "pending";
   const showDuplicate = slip.duplicateOf && !dismissedDuplicate;
   const credit = p.direction === "credit";
@@ -129,7 +132,7 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
               <Found value={p.amountPaise != null ? `₹ ${rupeesExact(p.amountPaise)}` : null} />
             )}
           </Field>
-          <Field label="Ref / RRN">
+          <Field label={p.channel === "Cheque" ? "Cheque no." : "Ref / RRN"}>
             <Found value={p.ref ? maskRef(p.ref) : null} />
           </Field>
           <Field label="Posted">
@@ -162,7 +165,30 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
           </div>
         )}
 
-        {mode === "ledger" && (
+        {mode === "ledger" && atm && (
+          <div className={s.slateMatch}>
+            <p className={s.slateLead}>
+              {cash === "wallet"
+                ? "Moves to your wallet: not counted as spending. The cash lines you write down are."
+                : cash === "spent"
+                  ? "Counted as spent now. Don't also write down what you buy with it."
+                  : "Cash from an ATM. Will you write down what you spend it on?"}
+            </p>
+            <div className="segmented" role="radiogroup" aria-label="How should this cash count?">
+              <label>
+                <input type="radio" name="cash" value="wallet" checked={cash === "wallet"} onChange={() => setCash("wallet")} />
+                <span>Log each spend</span>
+              </label>
+              <label>
+                <input type="radio" name="cash" value="spent" checked={cash === "spent"} onChange={() => setCash("spent")} />
+                <span>Count as spent</span>
+              </label>
+            </div>
+            <FieldError id={`cash-${slip.id}`} message={fieldErrors.cash} />
+          </div>
+        )}
+
+        {mode === "ledger" && !(atm && cash === "wallet") && (
           <div className={s.tagLine}>
             <span className={s.fieldLabel} data-warn={!slip.suggestion || undefined}>
               {slip.suggestion ? "Suggested tag" : "Needs a tag"}

@@ -2,6 +2,7 @@ import { Colophon } from "@/components/Colophon";
 import { Masthead } from "@/components/Masthead";
 import { TabBar } from "@/components/Mobile";
 import { Toaster } from "@/components/ui/Toaster";
+import { WriteIndicator } from "@/components/ui/WriteIndicator";
 import { wallClock } from "@/lib/dates";
 import { requireUser, wireConnection } from "@/server/app";
 import { readSyncState } from "@/server/gmail/sync";
@@ -27,6 +28,7 @@ export default async function BookLayout({ children }: LayoutProps<"/">) {
       <main id="main">{children}</main>
       <Colophon entries={book.entries} tracked={book.tracked} since={user.createdAt} />
       <TabBar waiting={waiting} />
+      <WriteIndicator />
     </Toaster>
   );
 }

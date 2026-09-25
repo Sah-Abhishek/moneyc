@@ -5,8 +5,9 @@
 import { revalidatePath } from "next/cache";
 import { act } from "@/server/app";
 import { createRule, deleteRule, moveRule, updateRule } from "@/server/services/rules";
+import { createGroup, deleteGroup, updateGroup } from "@/server/services/tagGroups";
 import { createTag, deleteTag, mergeTags, saveBudgets, updateTag } from "@/server/services/tags";
-import { idField, parseBudgets, parseInput, ruleInput, tagInput } from "@/server/validation";
+import { idField, parseBudgets, parseInput, ruleInput, tagGroupInput, tagInput } from "@/server/validation";
 import { UserError } from "@/server/services/context";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -43,6 +44,32 @@ export async function deleteTagAction(id: number) {
     const r = await deleteTag(ctx, parseInput(idField("Tag"), id));
     refresh();
     return { ok: true, message: `Tag deleted. ${r.untagged} line${r.untagged === 1 ? " is" : "s are"} now untagged${r.rulesRemoved ? `, ${r.rulesRemoved} rule${r.rulesRemoved === 1 ? "" : "s"} removed` : ""}.` };
+  });
+}
+
+const groupFields = (form: FormData) => ({ name: form.get("name"), tagIds: form.getAll("tagIds") });
+
+export async function createGroupAction(form: FormData) {
+  return act<{ id: number }>("groups.create", async ({ ctx }) => {
+    const group = await createGroup(ctx, parseInput(tagGroupInput, groupFields(form)));
+    refresh();
+    return { ok: true, data: { id: group.id }, message: `Added the ${group.name} group.` };
+  });
+}
+
+export async function updateGroupAction(form: FormData) {
+  return act("groups.update", async ({ ctx }) => {
+    const group = await updateGroup(ctx, parseInput(idField("Group"), form.get("id")), parseInput(tagGroupInput, groupFields(form)));
+    refresh();
+    return { ok: true, message: `Saved ${group.name}.` };
+  });
+}
+
+export async function deleteGroupAction(id: number) {
+  return act("groups.delete", async ({ ctx }) => {
+    await deleteGroup(ctx, parseInput(idField("Group"), id));
+    refresh();
+    return { ok: true, message: "Group deleted. Its tags and lines are unchanged." };
   });
 }
 

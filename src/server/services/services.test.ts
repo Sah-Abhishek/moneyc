@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { freshCtx, insertMail, key, secondUser, tagId } from "../test-helpers.ts";
-import { parseInput, entryInput, quickEntryInput, ruleInput } from "../validation.ts";
+import { parseInput, entryInput, quickEntryInput, ruleInput, tagGroupInput } from "../validation.ts";
 import { ConflictError, NotFoundError, UserError } from "./context.ts";
 import { addEntry, addQuickEntry, deleteEntry, findLikelyDuplicate, getEntry, listEntries, restoreEntry, updateEntry } from "./entries.ts";
 import { createRule, deleteRule, listRules, moveRule } from "./rules.ts";
 import { addSlateLine, createPerson, getAccount, listAccounts, matchPerson, slateStats, deletePerson } from "./slate.ts";
-import { monthSummary, monthlySpend, merchants } from "./summary.ts";
+import { groupReports, monthSummary, monthlySpend, merchants } from "./summary.ts";
+import { createGroup, deleteGroup, listGroups, updateGroup } from "./tagGroups.ts";
 import { createTag, deleteTag, listTags, mergeTags } from "./tags.ts";
 import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreMail, tryAutoFile, waitingCount, wireStats } from "./wire.ts";
 
@@ -32,6 +33,10 @@ test("quick entry: '+' means money in, amount is stored in paise", async () => {
   const { entry } = await addQuickEntry(ctx, input);
   assert.equal(entry.amount, 125050);
   assert.equal(entry.channel, "Cash");
+  const upi = await addQuickEntry(ctx, parseInput(quickEntryInput, { payee: "Chai", amount: "20", tagId: "", channel: "UPI", clientKey: key() }));
+  assert.equal(upi.entry.channel, "UPI");
+  // ATM cash needs the full form's question, so the one-line form can't take it.
+  assert.throws(() => parseInput(quickEntryInput, { payee: "ATM", amount: "500", tagId: "", channel: "ATM", clientKey: key() }), UserError);
 });
 
 test("running balance spans the whole book and ignores deleted lines", async () => {
@@ -258,6 +263,18 @@ test("a mail matching a hand-written line is flagged, and can be merged into it"
   assert.equal(await findLikelyDuplicate(ctx, { amount: -1000, occurredAt: "2026-09-25T10:00:00", ref: null }), null);
 });
 
+test("two payments of the same amount with different references are not duplicates", async () => {
+  const ctx = await freshCtx();
+  const first = await insertMail(ctx, HDFC, { gmailId: "a" });
+  await fileMail(ctx, first, { tagId: null });
+  await insertMail(ctx, HDFC.replace("626412345672", "626400000099"), { gmailId: "b" });
+  const [second] = await listSlips(ctx, "waiting");
+  assert.equal(second.duplicateOf, null); // ₹10 to the same person, a different UPI reference
+  await insertMail(ctx, HDFC, { gmailId: "c" }); // the same reference again (a re-sent alert)
+  const again = (await listSlips(ctx, "waiting")).find((s) => s.parsed.ref === "626412345672");
+  assert.ok(again?.duplicateOf);
+});
+
 test("auto-file needs a known tag, a complete parse and no 'ask' rule", async () => {
   const ctx = await freshCtx();
   // no history, no rule → waits for a person
@@ -318,4 +335,117 @@ test("slate lines are idempotent and people match by alternate names", async () 
   assert.equal((await matchPerson(ctx, "priya@okicici"))?.id, p);
   assert.equal(await matchPerson(ctx, "Priyanka"), null);
   await assert.rejects(createPerson(ctx, { name: "priya nair", matchNames: null, phone: null, note: null }), UserError);
+});
+
+// ─── cash and cheques ────────────────────────────────────────────────────
+
+const ATM_MAIL = "Rs.5000.00 withdrawn from A/c XX4721 at ATM on 22-09-26 at 18:02. Ref no 626455512345.";
+const CHEQUE_MAIL = "Dear Customer, Rs.25,000.00 has been debited from your A/c XX4721 on 03-10-26 towards clearing of Chq No. 000481 presented by SHARMA ESTATES.";
+
+test("an ATM withdrawal must say how the cash counts; wallet cash is neither spending nor balance", async () => {
+  const ctx = await freshCtx();
+  assert.throws(() => line({ channel: "ATM", amount: "5000" }), (e: UserError) => !!e.fieldErrors?.cash);
+  const food = await tagId(ctx, "Food & delivery");
+  const { entry } = await addEntry(ctx, line({ channel: "ATM", amount: "5000", cash: "wallet", tagId: String(food) }), key());
+  assert.equal(entry.toWallet, true);
+  assert.equal(entry.tag, null); // moving cash isn't spending, so it carries no spending tag
+  await addEntry(ctx, line({ channel: "Cash", payee: "Vegetables", amount: "300", occurredAt: "2026-09-21T09:00" }), key());
+  const m = await monthSummary(ctx, "2026-09", null);
+  assert.equal(m.spent, 30000);
+  const lines = (await listEntries(ctx, { ym: "2026-09", filter: "all", page: 1 })).entries;
+  assert.deepEqual(lines.map((e) => e.balance), [-30000, 0]);
+  assert.equal((await listEntries(ctx, { ym: "2026-09", filter: "untagged", page: 1 })).total, 1); // only the vegetables
+  // Changing the answer later counts it as spent after all.
+  const spent = await updateEntry(ctx, entry.id, line({ channel: "ATM", amount: "5000", cash: "spent" }), entry.version);
+  assert.equal(spent.toWallet, false);
+  assert.equal((await monthSummary(ctx, "2026-09", null)).spent, 530000);
+  // Money coming in over "ATM" (a deposit) never asks.
+  assert.equal(line({ channel: "ATM", direction: "in" }).toWallet, false);
+});
+
+test("ATM mail is never filed automatically and needs the cash choice", async () => {
+  const ctx = await freshCtx();
+  await createRule(ctx, { field: "sender", value: "hdfcbank.net", action: "file", tagId: null });
+  const mail = await insertMail(ctx, ATM_MAIL);
+  assert.equal(await tryAutoFile(ctx, mail, true), false);
+  await assert.rejects(fileMail(ctx, mail, { tagId: null }), (e: UserError) => !!e.fieldErrors?.cash);
+  const entry = await fileMail(ctx, mail, { tagId: null, cash: "wallet" });
+  assert.equal(entry.toWallet, true);
+  assert.equal((await monthSummary(ctx, "2026-09", null)).spent, 0);
+});
+
+test("cheques keep their number, and the clearing mail days later matches the line", async () => {
+  const ctx = await freshCtx();
+  assert.throws(() => line({ channel: "Cheque", chequeNo: "12a" }), (e: UserError) => !!e.fieldErrors?.chequeNo);
+  const { entry } = await addEntry(
+    ctx,
+    line({ channel: "Cheque", chequeNo: "000481", payee: "Sharma Estates", amount: "25000", occurredAt: "2026-09-28T10:00" }),
+    key(),
+  );
+  assert.equal(entry.ref, "000481");
+  await insertMail(ctx, CHEQUE_MAIL, { receivedAt: "2026-10-03T12:00:00" });
+  const [slip] = await listSlips(ctx, "waiting");
+  assert.equal(slip.parsed.channel, "Cheque");
+  assert.equal(slip.duplicateOf?.id, entry.id);
+  // Without a number on the line, the amount and the window still match it…
+  const ctx2 = await freshCtx("sub-cheque");
+  const bare = await addEntry(ctx2, line({ channel: "Cheque", payee: "Rent", amount: "25000", occurredAt: "2026-09-10T10:00" }), key());
+  await insertMail(ctx2, CHEQUE_MAIL, { receivedAt: "2026-10-03T12:00:00" });
+  assert.equal((await listSlips(ctx2, "waiting"))[0].duplicateOf?.id, bare.entry.id);
+  // …but a different cheque number is a different cheque.
+  await updateEntry(ctx2, bare.entry.id, line({ channel: "Cheque", chequeNo: "000999", payee: "Rent", amount: "25000", occurredAt: "2026-09-10T10:00" }), bare.entry.version);
+  assert.equal((await listSlips(ctx2, "waiting"))[0].duplicateOf, null);
+  // Switching a hand-written line away from Cheque drops the number.
+  const cash = await getEntry(ctx2, bare.entry.id);
+  assert.equal((await updateEntry(ctx2, cash.id, line({ channel: "Cash", payee: "Rent", amount: "25000" }), cash.version)).ref, null);
+});
+
+// ─── tag groups ──────────────────────────────────────────────────────────
+
+test("tag groups: unique names, spending tags only, a tag in several groups, owner only", async () => {
+  const ctx = await freshCtx();
+  const healthy = (await createTag(ctx, { name: "Healthy", color: "credit", kind: "spend", budget: null })).id;
+  const junk = (await createTag(ctx, { name: "Junk", color: "spend", kind: "spend", budget: null })).id;
+  const leisure = (await createTag(ctx, { name: "Leisure", color: "plum", kind: "spend", budget: null })).id;
+  const salary = (await createTag(ctx, { name: "Pay", color: "ink", kind: "income", budget: null })).id;
+
+  assert.throws(() => parseInput(tagGroupInput, { name: "Health", tagIds: [] }), (e: UserError) => !!e.fieldErrors?.tagIds);
+  const health = await createGroup(ctx, parseInput(tagGroupInput, { name: "Health", tagIds: [String(healthy), String(junk), String(leisure)] }));
+  assert.deepEqual(health.tagIds, [healthy, junk, leisure]);
+  await assert.rejects(createGroup(ctx, { name: "health", tagIds: [junk] }), UserError);
+  await assert.rejects(createGroup(ctx, { name: "Money", tagIds: [salary] }), UserError);
+  const treats = await createGroup(ctx, { name: "Treats", tagIds: [junk] }); // Junk is in two groups
+
+  const other = await secondUser(ctx);
+  await assert.rejects(createGroup(other, { name: "Mine", tagIds: [junk] }), ConflictError);
+  await assert.rejects(updateGroup(other, health.id, { name: "Stolen", tagIds: [] }), NotFoundError);
+  assert.deepEqual(await listGroups(other), []);
+
+  await updateGroup(ctx, treats.id, { name: "Treats", tagIds: [junk, leisure] });
+  await deleteTag(ctx, leisure); // leaves every group it was in
+  assert.deepEqual((await listGroups(ctx)).map((g) => g.tagIds), [[healthy, junk], [junk]]);
+  await deleteGroup(ctx, treats.id);
+  await assert.rejects(deleteGroup(ctx, treats.id), NotFoundError);
+});
+
+test("group reports split the month by tag and filter the ledger", async () => {
+  const ctx = await freshCtx();
+  const healthy = (await createTag(ctx, { name: "Healthy", color: "credit", kind: "spend", budget: null })).id;
+  const junk = (await createTag(ctx, { name: "Junk", color: "spend", kind: "spend", budget: null })).id;
+  const rent = await tagId(ctx, "Rent & bills");
+  const health = await createGroup(ctx, { name: "Health", tagIds: [healthy, junk] });
+  await addEntry(ctx, line({ payee: "Salad", amount: "250", tagId: String(healthy) }), key());
+  await addEntry(ctx, line({ payee: "Chips", amount: "80", tagId: String(junk) }), key());
+  await addEntry(ctx, line({ payee: "Burger", amount: "320", tagId: String(junk) }), key());
+  await addEntry(ctx, line({ payee: "Landlord", amount: "20000", tagId: String(rent) }), key());
+  await addEntry(ctx, line({ payee: "Fruit", amount: "100", tagId: String(healthy), occurredAt: "2026-08-15T10:00" }), key());
+
+  const [r] = await groupReports(ctx, "2026-09");
+  assert.equal(r.group.id, health.id);
+  assert.equal(r.spent, 65000);
+  assert.equal(r.prevSpent, 10000);
+  assert.equal(r.count, 3);
+  assert.deepEqual(r.byTag.map((t) => [t.tag.name, t.total, t.count]), [["Junk", 40000, 2], ["Healthy", 25000, 1]]);
+  const lines = await listEntries(ctx, { ym: "2026-09", filter: "all", groupId: health.id, page: 1 });
+  assert.deepEqual(lines.entries.map((e) => e.payee).sort(), ["Burger", "Chips", "Salad"]);
 });

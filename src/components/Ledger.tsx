@@ -2,9 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { clock, dayHeader, dayMonth, monthTitle, shiftYm } from "@/lib/dates";
 import { groupIndian, rupeesExact, signedAmount } from "@/lib/money";
-import type { Entry, LedgerFilter, Tag } from "@/lib/types";
+import type { Entry, LedgerFilter, Tag, TagGroup } from "@/lib/types";
 import { maskRef } from "@/lib/wire/parse";
 import { PAGE_SIZE } from "@/server/services/entries";
+import { GroupPicker } from "./GroupPicker";
 import { QuickEntry } from "./QuickEntry";
 import s from "./Ledger.module.css";
 
@@ -15,19 +16,22 @@ const FILTERS: { key: LedgerFilter; label: string }[] = [
   { key: "untagged", label: "Untagged" },
 ];
 
-export function ledgerHref(p: { ym?: string; currentYm: string; filter?: LedgerFilter; q?: string; tag?: Tag | null; page?: number }) {
+export function ledgerHref(p: {
+  ym?: string; currentYm: string; filter?: LedgerFilter; q?: string; tag?: Tag | null; group?: TagGroup | null; page?: number;
+}) {
   const sp = new URLSearchParams();
   if (p.ym && p.ym !== p.currentYm) sp.set("m", p.ym);
   if (p.filter && p.filter !== "all") sp.set("filter", p.filter);
   if (p.q) sp.set("q", p.q);
   if (p.tag) sp.set("tag", String(p.tag.id));
+  if (p.group) sp.set("group", String(p.group.id));
   if (p.page && p.page > 1) sp.set("page", String(p.page));
   const qs = sp.toString();
   return qs ? `/?${qs}` : "/";
 }
 
 export function Ledger({
-  entries, total, page, pages, filter, q, tag, ym, currentYm, today, tags, bookIsEmpty,
+  entries, total, page, pages, filter, q, tag, group, groups, ym, currentYm, today, tags, bookIsEmpty,
 }: {
   entries: Entry[];
   total: number;
@@ -36,16 +40,19 @@ export function Ledger({
   filter: LedgerFilter;
   q?: string;
   tag: Tag | null;
+  group: TagGroup | null;
+  groups: TagGroup[];
   ym: string;
   currentYm: string;
   today: string;
   tags: Tag[];
   bookIsEmpty: boolean;
 }) {
-  const link = (over: { ym?: string; filter?: LedgerFilter; q?: string; tag?: Tag | null; page?: number }) =>
-    ledgerHref({ ym, filter, q, tag, currentYm, ...over });
+  const link = (over: { ym?: string; filter?: LedgerFilter; q?: string; tag?: Tag | null; group?: TagGroup | null; page?: number }) =>
+    ledgerHref({ ym, filter, q, tag, group, currentYm, ...over });
+  // Cash moved to the wallet isn't counted in the day's net, as in the balance.
   const dayNet = new Map<string, number>();
-  for (const e of entries) dayNet.set(e.occurredAt.slice(0, 10), (dayNet.get(e.occurredAt.slice(0, 10)) ?? 0) + e.amount);
+  for (const e of entries) if (!e.toWallet) dayNet.set(e.occurredAt.slice(0, 10), (dayNet.get(e.occurredAt.slice(0, 10)) ?? 0) + e.amount);
   const year = ym.slice(0, 4);
 
   return (
@@ -60,6 +67,11 @@ export function Ledger({
           {tag && (
             <Link className={`stamp ${s.tagFilter}`} data-color={tag.color} href={link({ tag: null, page: 1 })} aria-label={`Showing ${tag.name} only. Remove this filter`}>
               {tag.name} ×
+            </Link>
+          )}
+          {group && (
+            <Link className={`stamp ${s.tagFilter}`} data-color="ink" href={link({ group: null, page: 1 })} aria-label={`Showing the ${group.name} group only. Remove this filter`}>
+              Group · {group.name} ×
             </Link>
           )}
         </h2>
@@ -86,6 +98,15 @@ export function Ledger({
               </Link>
             ))}
           </nav>
+          {groups.length > 0 && (
+            <GroupPicker
+              current={group?.id ?? null}
+              options={[
+                { label: "Every group", href: link({ group: null, page: 1 }) },
+                ...groups.map((g) => ({ id: g.id, label: g.name, href: link({ group: g, page: 1 }) })),
+              ]}
+            />
+          )}
         </div>
       </div>
 
@@ -107,7 +128,13 @@ export function Ledger({
       <div className="rule" />
 
       {entries.length === 0 ? (
-        <Empty bookIsEmpty={bookIsEmpty} q={q} filter={tag ? "tag" : filter} ym={ym} clearHref={link({ q: "", filter: "all", tag: null, page: 1 })} />
+        <Empty
+          bookIsEmpty={bookIsEmpty}
+          q={q}
+          filter={tag ? "tag" : group ? "group" : filter}
+          ym={ym}
+          clearHref={link({ q: "", filter: "all", tag: null, group: null, page: 1 })}
+        />
       ) : (
         <ol className={s.rows}>
           {entries.map((e, i) => {
@@ -142,7 +169,7 @@ export function Ledger({
   );
 }
 
-function Empty({ bookIsEmpty, q, filter, ym, clearHref }: { bookIsEmpty: boolean; q?: string; filter: LedgerFilter | "tag"; ym: string; clearHref: string }) {
+function Empty({ bookIsEmpty, q, filter, ym, clearHref }: { bookIsEmpty: boolean; q?: string; filter: LedgerFilter | "tag" | "group"; ym: string; clearHref: string }) {
   if (bookIsEmpty)
     return (
       <div className="empty-state">
@@ -170,6 +197,7 @@ function Empty({ bookIsEmpty, q, filter, ym, clearHref }: { bookIsEmpty: boolean
           {filter === "untagged" ? "Every spend this month has a tag."
             : filter === "wire" ? "Nothing came from the wire this month."
             : filter === "tag" ? "Nothing stamped with this tag this month."
+            : filter === "group" ? "Nothing stamped with this group's tags this month."
             : "Nothing written by hand this month."}
         </h3>
         <Link className="btn btn-line" href={clearHref}>
@@ -188,11 +216,11 @@ function Empty({ bookIsEmpty, q, filter, ym, clearHref }: { bookIsEmpty: boolean
 function Row({ e }: { e: Entry }) {
   const meta = [
     e.channel,
-    e.ref && (e.channel === "UPI" || e.channel === "IMPS" ? `RRN ${maskRef(e.ref)}` : maskRef(e.ref)),
+    e.ref && (e.channel === "Cheque" ? `No. ${e.ref}` : e.channel === "UPI" || e.channel === "IMPS" ? `RRN ${maskRef(e.ref)}` : maskRef(e.ref)),
     e.note,
     e.account,
   ].filter(Boolean);
-  const metaSm = [clock(e.occurredAt), e.channel, e.ref ? maskRef(e.ref) : e.note].filter(Boolean);
+  const metaSm = [clock(e.occurredAt), e.channel, e.ref ? (e.channel === "Cheque" ? `No. ${e.ref}` : maskRef(e.ref)) : e.note].filter(Boolean);
 
   return (
     <div className={s.row}>
@@ -219,6 +247,10 @@ function Row({ e }: { e: Entry }) {
           <Link href={`/slate?person=${e.personId}`} className={s.onSlate}>
             Slate · {e.personName}
           </Link>
+        ) : e.toWallet ? (
+          <span className={s.onSlate} title="Cash taken out to spend. The cash lines you write down count as spending instead">
+            To wallet
+          </span>
         ) : e.tag ? (
           <span className="stamp" data-color={e.tag.color}>
             {e.tag.name}
@@ -230,7 +262,7 @@ function Row({ e }: { e: Entry }) {
         ) : null}
         <span className={s.metaSm}>{metaSm.join(" · ")}</span>
       </div>
-      <span className={s.amount} data-credit={e.amount > 0 || undefined}>
+      <span className={s.amount} data-credit={e.amount > 0 || undefined} data-wallet={e.toWallet || undefined}>
         {signedAmount(e.amount)}
       </span>
       <span className={s.balance}>{e.balance < 0 ? "−" : ""}{groupIndian(Math.round(Math.abs(e.balance) / 100))}</span>

@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -90,7 +92,7 @@ fun Page(
 ) {
   val c = Ledger.colors
   Column(Modifier.fillMaxSize().background(c.paperBase)) {
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).statusBarsPadding()) {
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
       Masthead(shell, current, onSection, onReadMail, onReconnect)
       content()
       shell.me?.let { Colophon(it) }
@@ -197,7 +199,7 @@ private fun TabBar(current: Section?, waiting: Int, onSection: (Section) -> Unit
   Column(Modifier.fillMaxWidth().background(c.paperBase)) {
     Rule()
     Row(
-      Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(start = 34.dp, end = 34.dp, top = 12.dp, bottom = 8.dp),
+      Modifier.fillMaxWidth().padding(start = 34.dp, end = 34.dp, top = 12.dp, bottom = 8.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
     ) {
       TABS.forEach { (s, icon, w) ->
@@ -211,7 +213,12 @@ private fun TabBar(current: Section?, waiting: Int, onSection: (Section) -> Unit
           // With nothing waiting, the wire icon's red dot is clipped off (.noDot).
           val clip = s == Section.Wire && waiting == 0
           Box(Modifier.size(width = (if (clip) w - 8 else w).dp, height = 19.dp).clipToBounds()) {
-            Image(painterResource(icon), null, Modifier.size(width = w.dp, height = 19.dp), contentScale = ContentScale.FillBounds, alignment = Alignment.TopStart)
+            // Laid out at full width and cut on the right, so the dot is hidden rather than the icon squeezed.
+            Image(
+              painterResource(icon), null,
+              Modifier.wrapContentWidth(Alignment.Start, unbounded = true).requiredSize(width = w.dp, height = 19.dp),
+              contentScale = ContentScale.FillBounds,
+            )
           }
           Text(s.label.uppercase(), style = mono(8.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, 0.11), color = if (on) c.inkBase else c.inkFaint)
           Box(Modifier.size(width = 14.dp, height = 2.5.dp).background(if (on) c.spend else Color.Transparent))

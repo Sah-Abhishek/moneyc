@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isWallClock } from "../lib/dates.ts";
 import { parsePaise } from "../lib/money.ts";
-import { CHANNELS, TAG_COLORS } from "../lib/types.ts";
+import { CHANNELS, QUICK_CHANNELS, TAG_COLORS } from "../lib/types.ts";
 import { normaliseSender, SENDER_PATTERN } from "./gmail/banks.ts";
 import { UserError } from "./services/context.ts";
 
@@ -56,15 +56,37 @@ export const wallClockField = z
   .transform((s) => (s.length === 16 ? `${s}:00` : s)) // <input type=datetime-local> omits seconds
   .refine(isWallClock, "Choose a valid date and time");
 
-export const entryInput = z.object({
-  payee: text("Payee", 120),
-  amount: amountField,
-  direction: z.enum(["out", "in"], { error: "Choose money out or money in" }),
-  occurredAt: wallClockField,
-  channel: z.enum(CHANNELS, { error: "Choose how it was paid" }),
-  tagId: optionalId,
-  note: optionalText("Note", 280),
-});
+/** cash from an ATM: "wallet" = I'll write down what I spend; "spent" = count it all as spent now */
+export const cashChoice = z.enum(["wallet", "spent"], { error: "Choose how this cash should count" });
+
+export const entryInput = z
+  .object({
+    payee: text("Payee", 120),
+    amount: amountField,
+    direction: z.enum(["out", "in"], { error: "Choose money out or money in" }),
+    occurredAt: wallClockField,
+    channel: z.enum(CHANNELS, { error: "Choose how it was paid" }),
+    tagId: optionalId,
+    note: optionalText("Note", 280),
+    /** the number printed on a cheque; kept as the line's reference */
+    chequeNo: optionalText("Cheque number", 12).refine((s) => !s || /^\d{4,12}$/.test(s), "Enter the cheque number, digits only (6 on most cheques)"),
+    /** cash from an ATM: "wallet" = I'll write down what I spend; "spent" = count it all as spent now */
+    cash: z.preprocess((v) => (v === "" || v === null ? undefined : v), cashChoice.optional()),
+  })
+  .superRefine((e, ctx) => {
+    if (e.channel === "ATM" && e.direction === "out" && !e.cash)
+      ctx.addIssue({ code: "custom", path: ["cash"], message: "Choose how this cash should count" });
+  })
+  .transform(({ chequeNo, cash, ...e }) => {
+    const toWallet = e.channel === "ATM" && e.direction === "out" && cash === "wallet";
+    return {
+      ...e,
+      ref: e.channel === "Cheque" ? chequeNo : null,
+      toWallet,
+      // Cash moved to the wallet isn't spending, so it carries no spending tag.
+      tagId: toWallet ? null : e.tagId,
+    };
+  });
 export type EntryInput = z.infer<typeof entryInput>;
 
 export const quickEntryInput = z.object({
@@ -76,6 +98,8 @@ export const quickEntryInput = z.object({
     .transform((s) => ({ incoming: s.startsWith("+"), raw: s.replace(/^[+−-]\s*/, "") }))
     .pipe(z.object({ incoming: z.boolean(), raw: amountField })),
   tagId: optionalId,
+  /** how it was paid; not ATM, whose cash needs the full form's question. Absent = Cash, as the line always was */
+  channel: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.enum(QUICK_CHANNELS, { error: "Choose how it was paid" }).default("Cash")),
   clientKey: z.string().min(8).max(64),
 });
 
@@ -95,6 +119,28 @@ export const tagInput = z.object({
       }
       return p;
     }),
+});
+
+export const MAX_TAG_GROUPS = 50;
+
+export const tagGroupInput = z.object({
+  name: text("Name", 40),
+  tagIds: z
+    .array(z.union([z.string(), z.number()]), { error: "Choose the tags in this group" })
+    .max(200, "That's too many tags")
+    .transform((ids, ctx) => {
+      const out = new Set<number>();
+      for (const v of ids) {
+        const n = Number(v);
+        if (!Number.isInteger(n) || n <= 0) {
+          ctx.addIssue({ code: "custom", message: "Invalid tag" });
+          return z.NEVER;
+        }
+        out.add(n);
+      }
+      return [...out];
+    })
+    .pipe(z.array(z.number()).min(1, "Pick at least one tag for the group")),
 });
 
 export const ruleInput = z

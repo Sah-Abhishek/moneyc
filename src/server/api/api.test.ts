@@ -240,3 +240,39 @@ test("api: settings, senders, export and closing the account", async () => {
   const { rows } = await ctx.db.query("SELECT COUNT(*)::int AS n FROM users", []);
   assert.equal(rows[0].n, 0);
 });
+
+test("api: cheque numbers, ATM cash, tag groups and the group filter", async () => {
+  const { ctx, token, d } = await signedIn();
+  const food = await tagId(ctx, "Food & delivery");
+  const groceries = await tagId(ctx, "Groceries");
+
+  const cheque = await call(d, "POST", "entries", {
+    token, body: { payee: "Landlord", amount: "25000", direction: "out", occurredAt: "2026-09-01T09:00", channel: "Cheque", chequeNo: "000481", clientKey: key() },
+  });
+  assert.equal(cheque.json.data.ref, "000481");
+
+  const atm = { payee: "ATM", amount: "2000", direction: "out", occurredAt: "2026-09-02T09:00", channel: "ATM" };
+  assert.equal((await call(d, "POST", "entries", { token, body: { ...atm, clientKey: key() } })).json.fieldErrors.cash, "Choose how this cash should count");
+  const wallet = await call(d, "POST", "entries", { token, body: { ...atm, cash: "wallet", clientKey: key() } });
+  assert.equal(wallet.json.data.toWallet, true);
+
+  const made = await call(d, "POST", "tag-groups", { token, body: { name: "Health", tagIds: [food, groceries] } });
+  assert.equal(made.status, 201);
+  assert.equal((await call(d, "POST", "tag-groups", { token, body: { name: "health", tagIds: [food] } })).json.fieldErrors.name, "That name is taken");
+  assert.equal((await call(d, "POST", "tag-groups", { token, body: { name: "Empty", tagIds: [] } })).status, 422);
+  const groupId = made.json.data.id;
+
+  await call(d, "POST", "entries", {
+    token, body: { payee: "Salad", amount: "250", direction: "out", occurredAt: "2026-09-03T13:00", channel: "UPI", tagId: food, clientKey: key() },
+  });
+  const listed = await call(d, "GET", `entries?m=2026-09&group=${groupId}`, { token });
+  assert.deepEqual(listed.json.data.entries.map((e: { payee: string }) => e.payee), ["Salad"]);
+  const reports = await call(d, "GET", "reports?m=2026-09", { token });
+  assert.equal(reports.json.data.groups[0].spent, 25000);
+
+  const other = await secondUser(ctx);
+  const { token: theirs } = await createSession(ctx.db, other.userId, "test");
+  assert.equal((await call(d, "GET", `entries?group=${groupId}`, { token: theirs })).status, 404);
+  assert.equal((await call(d, "DELETE", `tag-groups/${groupId}`, { token: theirs })).status, 404);
+  assert.equal((await call(d, "DELETE", `tag-groups/${groupId}`, { token })).status, 200);
+});

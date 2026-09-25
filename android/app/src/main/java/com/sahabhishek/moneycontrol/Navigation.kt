@@ -30,7 +30,15 @@ import com.sahabhishek.moneycontrol.ui.ledger.LedgerScreen
 import com.sahabhishek.moneycontrol.ui.ledger.LedgerViewModel
 import com.sahabhishek.moneycontrol.ui.reports.ReportsScreen
 import com.sahabhishek.moneycontrol.ui.reports.ReportsViewModel
+import com.sahabhishek.moneycontrol.ui.budgets.BudgetsScreen
+import com.sahabhishek.moneycontrol.ui.budgets.BudgetsViewModel
+import com.sahabhishek.moneycontrol.ui.rules.RulesScreen
+import com.sahabhishek.moneycontrol.ui.rules.RulesViewModel
 import com.sahabhishek.moneycontrol.ui.settings.SettingsScreen
+import com.sahabhishek.moneycontrol.ui.slate.SlateScreen
+import com.sahabhishek.moneycontrol.ui.slate.SlateViewModel
+import com.sahabhishek.moneycontrol.ui.tags.TagsScreen
+import com.sahabhishek.moneycontrol.ui.tags.TagsViewModel
 import com.sahabhishek.moneycontrol.ui.settings.SettingsViewModel
 import com.sahabhishek.moneycontrol.ui.shell.Section
 import com.sahabhishek.moneycontrol.ui.shell.ShellViewModel
@@ -51,7 +59,12 @@ import kotlinx.serialization.Serializable
 @Serializable data class LedgerKey(val query: LedgerQuery? = null) : NavKey
 @Serializable data object WireKey : NavKey
 @Serializable data object SettingsKey : NavKey
-@Serializable data class ReportsKey(val ym: String? = null, val range: String = "6m") : NavKey
+@Serializable data class SlateKey(val person: Long? = null) : NavKey
+@Serializable data object TagsKey : NavKey
+@Serializable data object BudgetsKey : NavKey
+@Serializable data object RulesKey : NavKey
+/** `group` narrows "By group" to one tag group (/reports?group=); `toGroups` opens at that section (#groups). */
+@Serializable data class ReportsKey(val ym: String? = null, val range: String = "6m", val group: Long? = null, val toGroups: Boolean = false) : NavKey
 @Serializable data class EntryKey(val id: Long) : NavKey
 /** "A new line"; `date` (YYYY-MM-DD) pre-fills a past month's day, as /new?date= does. */
 @Serializable data class NewEntryKey(val date: String? = null) : NavKey
@@ -62,7 +75,9 @@ interface Nav {
   fun ledger(q: LedgerQuery?)
   fun entry(id: Long)
   fun newEntry(date: String?)
-  fun reports(ym: String?, range: String)
+  fun reports(ym: String?, range: String, group: Long? = null, toGroups: Boolean = false)
+  /** The slate, with this person's account open (/slate?person=). */
+  fun slate(person: Long?)
   fun back()
   fun readMail()
   fun reconnect()
@@ -146,7 +161,7 @@ private fun SignedIn(graph: AppGraph, session: Int) {
     entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), rememberViewModelStoreNavEntryDecorator()),
     entryProvider = entryProvider {
       entry<LedgerKey> { key ->
-        LedgerScreen(shell, nav, viewModel { LedgerViewModel(graph.book, graph.wire, graph.messages, graph.changes) }, key.query)
+        LedgerScreen(shell, nav, viewModel { LedgerViewModel(graph.book, graph.wire, graph.messages, graph.changes, graph.prefs) }, key.query)
       }
       entry<EntryKey> { key ->
         EntryScreen(shell, nav, viewModel { EntryViewModel(key.id, "", graph.book, graph.messages) }, isNew = false)
@@ -158,8 +173,19 @@ private fun SignedIn(graph: AppGraph, session: Int) {
         EntryScreen(shell, nav, viewModel { EntryViewModel(null, start, graph.book, graph.messages) }, isNew = true)
       }
       entry<ReportsKey> { key ->
-        ReportsScreen(shell, nav, viewModel { ReportsViewModel(graph.book, graph.messages, graph.changes) }, key.ym, key.range)
+        ReportsScreen(shell, nav, viewModel { ReportsViewModel(graph.book, graph.messages, graph.changes) }, key.ym, key.range, key.group, key.toGroups)
       }
+      entry<SlateKey> { key ->
+        SlateScreen(
+          shell, nav,
+          viewModel { SlateViewModel(graph.slate, graph.messages, graph.changes) },
+          viewModel(key = "slate-wire") { WireViewModel(graph.wire, graph.book, graph.messages, graph.changes) },
+          graph.messages, key.person,
+        )
+      }
+      entry<TagsKey> { TagsScreen(shell, nav, viewModel { TagsViewModel(graph.book, graph.messages, graph.changes) }) }
+      entry<BudgetsKey> { BudgetsScreen(shell, nav, viewModel { BudgetsViewModel(graph.book, graph.messages, graph.changes) }) }
+      entry<RulesKey> { RulesScreen(shell, nav, viewModel { RulesViewModel(graph.book, graph.messages, graph.changes) }) }
       entry<SettingsKey> { SettingsScreen(shell, nav, viewModel { SettingsViewModel(graph.account, graph.messages, graph.changes) }) }
       entry<WireKey> { WireScreen(shell, nav, viewModel { WireViewModel(graph.wire, graph.book, graph.messages, graph.changes) }) }
     },
@@ -181,10 +207,10 @@ private class AppNav(
 
   override fun section(s: Section) = when (s) {
     Section.Ledger -> reset(null)
-    Section.Slate -> web("slate")
-    Section.Tags -> web("tags")
-    Section.Budgets -> web("budgets")
-    Section.Rules -> web("rules")
+    Section.Slate -> reset(SlateKey())
+    Section.Tags -> reset(TagsKey)
+    Section.Budgets -> reset(BudgetsKey)
+    Section.Rules -> reset(RulesKey)
     Section.Wire -> reset(WireKey)
     Section.Reports -> reset(ReportsKey())
     Section.Settings -> reset(SettingsKey)
@@ -197,15 +223,16 @@ private class AppNav(
     if (stack.lastOrNull() is LedgerKey) stack[stack.lastIndex] = LedgerKey(q) else stack.add(LedgerKey(q))
   }
 
+  override fun slate(person: Long?) = reset(SlateKey(person))
   override fun entry(id: Long) {
     stack.add(EntryKey(id))
   }
   override fun newEntry(date: String?) {
     stack.add(NewEntryKey(date))
   }
-  override fun reports(ym: String?, range: String) {
-    // Changing month or range on Reports is a new URL for the same page.
-    if (stack.lastOrNull() is ReportsKey) stack[stack.lastIndex] = ReportsKey(ym, range) else stack.add(ReportsKey(ym, range))
+  override fun reports(ym: String?, range: String, group: Long?, toGroups: Boolean) {
+    // Changing month, range or group on Reports is a new URL for the same page.
+    if (stack.lastOrNull() is ReportsKey) stack[stack.lastIndex] = ReportsKey(ym, range, group, toGroups) else stack.add(ReportsKey(ym, range, group, toGroups))
   }
   override fun back() {
     if (stack.size > 1) stack.removeLastOrNull() else reset(null)

@@ -91,8 +91,11 @@ fun WireSlipCard(
   var toSlate by rememberSaveable(slip.id) { mutableStateOf(slip.person != null) }
   var dismissedDuplicate by rememberSaveable(slip.id) { mutableStateOf(false) }
   var tagId by rememberSaveable(slip.id) { mutableStateOf(slip.suggestion?.tag?.id) }
+  // Cash from an ATM: spending only if the owner won't write down what it buys. Always asked.
+  val atm = p.channel == "ATM" && p.direction == "debit"
+  var cash by rememberSaveable(slip.id) { mutableStateOf<String?>(null) }
 
-  val needsReview = slip.suggestion == null || slip.confidence < 0.8 || slip.askFirst
+  val needsReview = slip.suggestion == null || slip.confidence < 0.8 || slip.askFirst || atm
   val tone = if (slip.confidence >= 0.9) c.credit else c.pending
   val credit = p.isCredit
   val person = slip.person
@@ -152,7 +155,8 @@ fun WireSlipCard(
     // body
     Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       Text(
-        if ((slip.subject?.length ?: 0) > 30) slip.subject!! else firstSentence(slip.body),
+        // A <p> on the web: line breaks in the mail read as spaces.
+        (if ((slip.subject?.length ?: 0) > 30) slip.subject!! else firstSentence(slip.body)).replace(Regex("\\s+"), " ").trim(),
         style = sans(13.sp, FontWeight.Medium, lineHeight = 1.38),
         color = c.inkBase,
       )
@@ -169,7 +173,7 @@ fun WireSlipCard(
             FieldError(fieldErrors["amount"])
           } else Found(p.amountPaise?.let { "₹ ${rupeesExact(it)}" })
         }
-        Field("Ref / RRN") { Found(p.ref?.let(::maskRef)) }
+        Field(if (p.channel == "Cheque") "Cheque no." else "Ref / RRN") { Found(p.ref?.let(::maskRef)) }
         Field("Posted") { Text(posted(slip.occurredAt), style = mono(11.sp, spacing = 0.01), color = c.inkBase) }
       }
 
@@ -195,7 +199,23 @@ fun WireSlipCard(
         }
       }
 
-      if (!toSlate) {
+      if (!toSlate && atm) {
+        Column(Modifier.fillMaxWidth().background(c.paperSunk).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            when (cash) {
+              "wallet" -> "Moves to your wallet: not counted as spending. The cash lines you write down are."
+              "spent" -> "Counted as spent now. Don't also write down what you buy with it."
+              else -> "Cash from an ATM. Will you write down what you spend it on?"
+            },
+            style = sans(13.sp, lineHeight = 1.45),
+            color = c.inkBase,
+          )
+          Segmented(listOf("wallet" to "Log each spend", "spent" to "Count as spent"), cash, { cash = it })
+          FieldError(fieldErrors["cash"])
+        }
+      }
+
+      if (!toSlate && !(atm && cash == "wallet")) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
           Text(
             if (slip.suggestion != null) "SUGGESTED TAG" else "NEEDS A TAG",
@@ -240,10 +260,11 @@ fun WireSlipCard(
           {
             onFile(
               Filing(
-                tagId = if (toSlate && person != null) null else tagId,
+                tagId = if (toSlate && person != null) null else if (atm && cash == "wallet") null else tagId,
                 personId = if (toSlate) person?.id else null,
                 payee = if (editing) payee else null,
                 amount = if (editing) amount else null,
+                cash = if (atm && !toSlate) cash else null,
               ),
             )
           },
@@ -307,6 +328,7 @@ private fun TagPicker(tags: List<Tag>, selected: Long?, credit: Boolean, onSelec
     fill = false,
     textStyle = mono(9.sp, FontWeight.Medium, 0.09).copy(color = tone),
     uppercase = true,
+    chevron = if (tag == null) com.sahabhishek.moneycontrol.ui.web.Chevron.Ochre else com.sahabhishek.moneycontrol.ui.web.Chevron.None,
     look = Modifier.background(tone.mix(0.12f)).border(1.dp, tone.mix(if (tag == null) 0.5f else 0.4f)).padding(horizontal = 9.dp, vertical = 5.dp),
   )
 }

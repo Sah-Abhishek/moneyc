@@ -1,19 +1,56 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { addLineAction, deleteEntryAction, restoreEntryAction } from "@/app/actions/entries";
-import type { Tag } from "@/lib/types";
+import { QUICK_CHANNELS, type Tag } from "@/lib/types";
 import { useToast } from "./ui/Toaster";
 import { callAction, newKey, useSubmit } from "./ui/useSubmit";
 import s from "./Ledger.module.css";
 
 // Rule 02: the blank line is always ready. Payee + amount, Enter, done.
-// A leading "+" records money coming in. The line is dated now and marked
-// cash; open it afterwards to change anything.
+// A leading "+" records money coming in. The line is dated now and paid the
+// way chosen beside it (Cash until another is picked; the last choice is
+// remembered on this device); open it afterwards to change anything.
+const MODE_KEY = "quick-line-mode";
+const modeListeners = new Set<() => void>();
+/** the choice when this browser won't store it */
+let memoryMode: string | null = null;
+
+function readMode(): string {
+  try {
+    const saved = localStorage.getItem(MODE_KEY);
+    if (saved && (QUICK_CHANNELS as readonly string[]).includes(saved)) return saved;
+  } catch {
+    // storage blocked: this page's choice, else Cash
+  }
+  return memoryMode ?? "Cash";
+}
+
+function saveMode(mode: string) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // storage blocked: kept for this page only
+    memoryMode = mode;
+  }
+  modeListeners.forEach((l) => l());
+}
+function subscribeMode(listener: () => void) {
+  modeListeners.add(listener);
+  const onStorage = (e: StorageEvent) => e.key === MODE_KEY && listener();
+  window.addEventListener("storage", onStorage);
+  return () => {
+    modeListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
 export function QuickEntry({ today, tags }: { today: string; tags: Tag[] }) {
   const toast = useToast();
   const [clientKey, setClientKey] = useState(newKey);
+  const mode = useSyncExternalStore(subscribeMode, readMode, () => "Cash");
+
   const { onSubmit, pending, error, fieldErrors } = useSubmit(addLineAction, {
     resetOnSuccess: true,
     onSuccess: (r, form) => {
@@ -43,7 +80,7 @@ export function QuickEntry({ today, tags }: { today: string; tags: Tag[] }) {
   const tagIncome = tags.filter((t) => t.kind === "income");
 
   return (
-    <form onSubmit={onSubmit} className={s.quick} id="new-line" aria-label="Add a line" noValidate>
+    <form onSubmit={onSubmit} className={s.quick} id="new-line" aria-label="Add a line" aria-busy={pending} noValidate>
       <input type="hidden" name="clientKey" value={clientKey} />
       <span className={s.quickPlus} aria-hidden>
         <Image src="/icons/plus-entry.svg" alt="" width={13} height={13} />
@@ -65,6 +102,18 @@ export function QuickEntry({ today, tags }: { today: string; tags: Tag[] }) {
         aria-describedby={error ? "ql-error" : undefined}
       />
       <span className={`${s.quickRule} ${s.hideSm}`} aria-hidden />
+      {/* On a phone the way paid, the tag and the button drop to a second row. */}
+      <span className={s.quickBreak} aria-hidden />
+      <label className={s.quickMode}>
+        <span className="sr-only">Paid by</span>
+        <select name="channel" value={mode} onChange={(e) => saveMode(e.target.value)}>
+          {QUICK_CHANNELS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className={s.quickTag}>
         <span className="sr-only">Tag</span>
         <Image src="/icons/plus-tag.svg" alt="" width={9} height={9} />

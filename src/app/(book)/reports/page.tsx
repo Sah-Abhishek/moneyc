@@ -1,9 +1,10 @@
 import { FrontPage } from "@/components/FrontPage";
+import { GroupReports } from "@/components/GroupReports";
 import { LongView } from "@/components/LongView";
 import Link from "next/link";
 import { monthTitle, shiftYm, wallClock, YM, ymOf } from "@/lib/dates";
 import { requireUser } from "@/server/app";
-import { merchants, monthlySpend, monthSummary, type Range } from "@/server/services/summary";
+import { groupReports, merchants, monthlySpend, monthSummary, type Range } from "@/server/services/summary";
 
 export const metadata = { title: "Reports — Money Control" };
 
@@ -15,11 +16,13 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   const current = ymOf(wallClock(user.timezone));
   const ym = typeof sp.m === "string" && YM.test(sp.m) && sp.m <= current ? sp.m : current;
   const range = RANGES.find((r) => r === sp.range) ?? "6m";
-  const [summary, months, merchantList] = await Promise.all([
-    monthSummary(ctx, ym, user.monthlyBudget), monthlySpend(ctx, ym, range), merchants(ctx, ym),
+  const [summary, months, merchantList, groups] = await Promise.all([
+    monthSummary(ctx, ym, user.monthlyBudget), monthlySpend(ctx, ym, range), merchants(ctx, ym), groupReports(ctx, ym),
   ]);
+  // An unknown group (deleted meanwhile) shows every group rather than nothing.
+  const group = groups.find((g) => String(g.group.id) === sp.group)?.group.id ?? null;
 
-  const href = (m: string) => `/reports?m=${m}&range=${range}`;
+  const href = (m: string, g = group) => `/reports?m=${m}&range=${range}${g != null ? `&group=${g}` : ""}`;
   return (
     <>
       <nav className="page" aria-label="Month" style={{ display: "flex", gap: 8, alignItems: "center", paddingTop: 24, paddingBottom: 0 }}>
@@ -36,6 +39,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         )}
       </nav>
       <FrontPage m={summary} />
+      <GroupReports ym={ym} reports={groups} selected={group} hrefFor={(g) => `${href(ym, g)}#groups`} />
       <LongView full ym={ym} range={range} months={months} daily={summary.daily} daysElapsed={summary.daysElapsed} merchants={merchantList} />
     </>
   );

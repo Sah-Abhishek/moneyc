@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from "react";
 import type { ActionResult } from "@/lib/types";
+import { trackWrite } from "./writes";
 
 export const OFFLINE_MESSAGE = "Couldn't reach the server — check your connection and try again. What you typed is still here.";
 
@@ -34,7 +35,7 @@ export function useSubmit<T>(
       inFlight.current = true;
       startTransition(async () => {
         try {
-          const r = await action(data);
+          const r = await trackWrite(() => action(data));
           if (r.ok) {
             setError(null);
             setFieldErrors({});
@@ -60,10 +61,14 @@ export function useSubmit<T>(
   return { onSubmit, pending, error, fieldErrors, setError } as const;
 }
 
-/** Calls an action outside a form (buttons, toasts), reporting failures the same way. */
-export async function callAction<T>(fn: () => Promise<ActionResult<T>>): Promise<ActionResult<T>> {
+/**
+ * Calls an action outside a form (buttons, toasts), reporting failures the same
+ * way. `quiet` keeps it off the "Saving…" indicator (background reads that show
+ * their own state, like the wire's sync).
+ */
+export async function callAction<T>(fn: () => Promise<ActionResult<T>>, opts: { quiet?: boolean } = {}): Promise<ActionResult<T>> {
   try {
-    return await fn();
+    return await (opts.quiet ? fn() : trackWrite(fn));
   } catch {
     return { ok: false, error: typeof navigator !== "undefined" && !navigator.onLine ? OFFLINE_MESSAGE : "Something interrupted the request. Try again." };
   }
