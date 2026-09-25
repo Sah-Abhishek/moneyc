@@ -8,6 +8,7 @@ import { unlinkEntryAction } from "@/app/actions/slate";
 import { rupeesExact } from "@/lib/money";
 import { CHANNELS, type Entry, type Tag } from "@/lib/types";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction, newKey, useSubmit } from "./ui/useSubmit";
 import s from "./EntryForm.module.css";
@@ -160,14 +161,18 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
                 </label>
               ))}
             </div>
-            <select className="select mono" aria-label="Other ways to pay" value={MAIN_CHANNELS.includes(channel as never) ? "" : channel} onChange={(e) => e.target.value && setChannel(e.target.value)}>
-              <option value="">Other…</option>
-              {CHANNELS.filter((c) => !MAIN_CHANNELS.includes(c as never)).map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <Select
+              className={s.other}
+              aria-label="Other ways to pay"
+              placeholder="Other…"
+              value={MAIN_CHANNELS.includes(channel as never) ? "" : channel}
+              onChange={(v) => {
+                if (!v) return;
+                setChannel(v);
+                setDirty(true);
+              }}
+              options={CHANNELS.filter((c) => !MAIN_CHANNELS.includes(c as never)).map((c) => ({ value: c, label: c }))}
+            />
             <input type="hidden" name="channel" value={channel} />
           </div>
         </div>
@@ -252,23 +257,18 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
           <div className="form-row">
             <label htmlFor="ef-tag">Tag</label>
             <div>
-              <select id="ef-tag" name="tagId" className="select" defaultValue={entry?.tag?.id ?? ""} aria-describedby={describedBy("tagId")}>
-                <option value="">No tag</option>
-                <optgroup label="Spending">
-                  {tags.filter((t) => t.kind === "spend").map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Income">
-                  {tags.filter((t) => t.kind === "income").map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+              <Select
+                id="ef-tag"
+                name="tagId"
+                defaultValue={entry?.tag?.id != null ? String(entry.tag.id) : ""}
+                onChange={() => setDirty(true)}
+                aria-describedby={describedBy("tagId")}
+                options={[
+                  { value: "", label: "No tag" },
+                  { label: "Spending", options: tags.filter((t) => t.kind === "spend").map((t) => ({ value: String(t.id), label: t.name, color: t.color })) },
+                  { label: "Income", options: tags.filter((t) => t.kind === "income").map((t) => ({ value: String(t.id), label: t.name, color: t.color })) },
+                ]}
+              />
               <FieldError id="err-tagId" message={err("tagId")} />
             </div>
           </div>

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState, useSyncExternalStore } from "react";
 import { addLineAction, deleteEntryAction, restoreEntryAction } from "@/app/actions/entries";
 import { QUICK_CHANNELS, type Tag } from "@/lib/types";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction, newKey, useSubmit } from "./ui/useSubmit";
 import s from "./Ledger.module.css";
@@ -104,39 +105,32 @@ export function QuickEntry({ today, tags }: { today: string; tags: Tag[] }) {
       <span className={`${s.quickRule} ${s.hideSm}`} aria-hidden />
       {/* On a phone the way paid, the tag and the button drop to a second row. */}
       <span className={s.quickBreak} aria-hidden />
-      <label className={s.quickMode}>
-        <span className="sr-only">Paid by</span>
-        <select name="channel" value={mode} onChange={(e) => saveMode(e.target.value)}>
-          {QUICK_CHANNELS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className={s.quickTag}>
-        <span className="sr-only">Tag</span>
-        <Image src="/icons/plus-tag.svg" alt="" width={9} height={9} />
-        <select name="tag" defaultValue="">
-          <option value="">Tag</option>
-          <optgroup label="Spending">
-            {tagSpend.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </optgroup>
-          {tagIncome.length > 0 && (
-            <optgroup label="Income">
-              {tagIncome.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-      </label>
+      <Select
+        variant="bare"
+        className={s.quickMode}
+        name="channel"
+        value={mode}
+        onChange={saveMode}
+        options={QUICK_CHANNELS.map((c) => ({ value: c, label: c }))}
+        aria-label="Paid by"
+      />
+      <Select
+        variant="bare"
+        className={s.quickTag}
+        name="tag"
+        aria-label="Tag"
+        options={[
+          { value: "", label: "No tag" },
+          { label: "Spending", options: tagSpend.map((t) => ({ value: String(t.id), label: t.name, color: t.color })) },
+          { label: "Income", options: tagIncome.map((t) => ({ value: String(t.id), label: t.name, color: t.color })) },
+        ]}
+        renderValue={(o) => (
+          <>
+            {o?.color ? <span className="swatch" data-color={o.color} /> : <Image src="/icons/plus-tag.svg" alt="" width={9} height={9} />}
+            <span className={s.quickTagName}>{o?.value ? o.label : "Tag"}</span>
+          </>
+        )}
+      />
       <span className={`${s.quickRule} ${s.hideSm}`} aria-hidden />
       <label className={s.quickAmount}>
         <span aria-hidden>₹</span>

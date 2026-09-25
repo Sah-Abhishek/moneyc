@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createRuleAction, deleteRuleAction, moveRuleAction, updateRuleAction } from "@/app/actions/book";
 import type { Rule, RuleAction, RuleField, Tag } from "@/lib/types";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
 import { describeAction, describeCondition } from "./ruleText";
@@ -22,13 +23,12 @@ function RuleFields({ rule, tags, errors }: { rule?: Rule; tags: Tag[]; errors: 
     <div className={s.fields}>
       <label className={s.field}>
         <span className="eyebrow">If</span>
-        <select name="field" className="select" value={field} onChange={(e) => setField(e.target.value as RuleField)}>
-          {(Object.keys(FIELD_LABEL) as RuleField[]).map((f) => (
-            <option key={f} value={f}>
-              {FIELD_LABEL[f]}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="field"
+          value={field}
+          onChange={(v) => setField(v as RuleField)}
+          options={(Object.keys(FIELD_LABEL) as RuleField[]).map((f) => ({ value: f, label: FIELD_LABEL[f] }))}
+        />
       </label>
       <label className={s.field}>
         <span className="eyebrow">Value</span>
@@ -45,26 +45,24 @@ function RuleFields({ rule, tags, errors }: { rule?: Rule; tags: Tag[]; errors: 
       </label>
       <label className={s.field}>
         <span className="eyebrow">Then</span>
-        <select name="action" className="select" value={effectiveAction} onChange={(e) => setAction(e.target.value as RuleAction)}>
-          {actions.map((a) => (
-            <option key={a} value={a}>
-              {a === "tag" ? "Stamp a tag" : a === "file" ? "File automatically" : "Ask me first"}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="action"
+          value={effectiveAction}
+          onChange={(v) => setAction(v as RuleAction)}
+          options={actions.map((a) => ({ value: a, label: a === "tag" ? "Stamp a tag" : a === "file" ? "File automatically" : "Ask me first" }))}
+        />
         <FieldError id="rule-action-err" message={errors.action} />
       </label>
       {effectiveAction === "tag" && (
         <label className={s.field}>
           <span className="eyebrow">Tag</span>
-          <select name="tagId" className="select" defaultValue={rule?.tag?.id ?? ""} aria-invalid={!!errors.tagId || undefined}>
-            <option value="">Choose a tag</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            name="tagId"
+            defaultValue={rule?.tag?.id != null ? String(rule.tag.id) : ""}
+            placeholder="Choose a tag"
+            aria-invalid={!!errors.tagId || undefined}
+            options={tags.map((t) => ({ value: String(t.id), label: t.name, color: t.color }))}
+          />
           <FieldError id="rule-tag-err" message={errors.tagId} />
         </label>
       )}

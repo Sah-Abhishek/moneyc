@@ -52,8 +52,15 @@
   align-items: center;
   gap: 10px;
 }
-.how select {
+.other {
   width: auto;
+  min-width: 120px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.person {
+  width: auto;
+  min-width: 200px;
 }
 .slateRow {
   display: flex;

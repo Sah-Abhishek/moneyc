@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { linkEntryAction } from "@/app/actions/slate";
 import { FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction } from "./ui/useSubmit";
 import s from "./EntryForm.module.css";
@@ -35,14 +36,14 @@ export function SlateLinker({ entryId, amount, people }: { entryId: number; amou
         </p>
       ) : (
         <div className={s.slateRow}>
-          <select className="select" style={{ width: "auto" }} value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Whose slate">
-            <option value="">Choose a person…</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            className={s.person}
+            aria-label="Whose slate"
+            placeholder="Choose a person…"
+            value={person}
+            onChange={setPerson}
+            options={people.map((p) => ({ value: String(p.id), label: p.name }))}
+          />
           <button
             type="button"
             className="btn btn-ink"

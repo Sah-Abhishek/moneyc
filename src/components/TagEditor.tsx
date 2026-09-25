@@ -6,9 +6,15 @@ import { createTagAction, deleteTagAction, mergeTagsAction, updateTagAction } fr
 import { rupeesExact } from "@/lib/money";
 import { TAG_COLOR_LABEL, TAG_COLORS, type Tag } from "@/lib/types";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
 import s from "./TagEditor.module.css";
+
+const KINDS = [
+  { value: "spend", label: "Spending" },
+  { value: "income", label: "Income" },
+];
 
 function ColorPicker({ name, value, onChange }: { name: string; value: string; onChange?: (c: string) => void }) {
   return (
@@ -63,13 +69,10 @@ export function TagEditor({ tag, usage, others }: { tag: Tag; usage: { entries: 
               <span className="eyebrow">Colour</span>
               <ColorPicker name="color" value={tag.color} onChange={(c) => setColor(c as Tag["color"])} />
             </div>
-            <label className={s.field}>
-              <span className="eyebrow">Counts as</span>
-              <select name="kind" className="select" defaultValue={tag.kind}>
-                <option value="spend">Spending</option>
-                <option value="income">Income</option>
-              </select>
-            </label>
+            <div className={s.field}>
+              <span className="eyebrow" id={`tag-kind-${tag.id}`}>Counts as</span>
+              <Select name="kind" defaultValue={tag.kind} aria-labelledby={`tag-kind-${tag.id}`} options={KINDS} />
+            </div>
             <label className={s.field}>
               <span className="eyebrow">Monthly budget</span>
               <input name="budget" className="input mono" inputMode="decimal" defaultValue={tag.budget != null ? rupeesExact(tag.budget) : ""} placeholder="None" />
@@ -103,21 +106,17 @@ export function TagEditor({ tag, usage, others }: { tag: Tag; usage: { entries: 
           {merging && (
             <form onSubmit={merge.onSubmit} className={s.merge} noValidate>
               <input type="hidden" name="from" value={tag.id} />
-              <label className={s.field}>
-                <span className="eyebrow">
+              <div className={s.field}>
+                <span className="eyebrow" id={`tag-into-${tag.id}`}>
                   Move {usage.entries} line{usage.entries === 1 ? "" : "s"} onto
                 </span>
-                <select name="into" className="select" defaultValue="" required>
-                  <option value="" disabled>
-                    Choose a tag
-                  </option>
-                  {others.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <Select
+                  name="into"
+                  placeholder="Choose a tag"
+                  aria-labelledby={`tag-into-${tag.id}`}
+                  options={others.map((o) => ({ value: String(o.id), label: o.name, color: o.color }))}
+                />
+              </div>
               <p className="hint">“{tag.name}” is removed after the merge. This can&apos;t be undone.</p>
               <FormError message={merge.error} />
               <button type="submit" className="btn btn-ink" disabled={merge.pending}>
@@ -149,13 +148,10 @@ export function NewTagForm() {
         <span className="eyebrow">Colour</span>
         <ColorPicker name="color" value="teal" />
       </div>
-      <label className={s.field}>
-        <span className="eyebrow">Counts as</span>
-        <select name="kind" className="select" defaultValue="spend">
-          <option value="spend">Spending</option>
-          <option value="income">Income</option>
-        </select>
-      </label>
+      <div className={s.field}>
+        <span className="eyebrow" id="new-tag-kind">Counts as</span>
+        <Select name="kind" defaultValue="spend" aria-labelledby="new-tag-kind" options={KINDS} />
+      </div>
       <label className={s.field}>
         <span className="eyebrow">Monthly budget</span>
         <input name="budget" className="input mono" inputMode="decimal" placeholder="Optional" />

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { deleteAccountAction, disconnectGmailAction, saveMailSendersAction, saveSettingsAction, signOutAction } from "@/app/actions/account";
 import { rupeesExact } from "@/lib/money";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
 import s from "./SettingsForms.module.css";
@@ -45,14 +46,15 @@ export function SettingsForms(p: {
           <div className="form-row">
             <label htmlFor="set-tz">Timezone</label>
             <div>
-              <select id="set-tz" name="timezone" className="select" defaultValue={p.timezone}>
-                {p.zones.map((z) => (
-                  <option key={z} value={z}>
-                    {z.replace(/_/g, " ")}
-                  </option>
-                ))}
-              </select>
-              <span className="hint">Decides which day a payment falls on. Existing lines keep the time they were written with.</span>
+              <Select
+                id="set-tz"
+                name="timezone"
+                defaultValue={p.timezone}
+                aria-describedby="set-tz-hint"
+                aria-invalid={!!save.fieldErrors.timezone || undefined}
+                options={p.zones.map((z) => ({ value: z, label: z.replace(/_/g, " ") }))}
+              />
+              <span className="hint" id="set-tz-hint">Decides which day a payment falls on. Existing lines keep the time they were written with.</span>
               <FieldError id="set-tz-err" message={save.fieldErrors.timezone} />
             </div>
           </div>

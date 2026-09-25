@@ -1,0 +1,160 @@
+/* The closed control. "field" matches .input / .select; "bare" inherits. */
+/* :where() keeps these at zero specificity, so a caller's className always wins. */
+:where(.field, .bare) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+:where(.field) {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule-hair);
+  background: var(--paper-raised);
+  color: var(--ink-base);
+  font-size: 15px;
+}
+.field:hover {
+  border-color: var(--ink-faint);
+}
+.field:focus-visible,
+.field[aria-expanded="true"] {
+  border-color: var(--ink-base);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ink-base);
+}
+.field[data-invalid] {
+  border-color: var(--signal-spend);
+}
+.field[data-empty] .value {
+  color: var(--ink-muted);
+}
+.field:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+:where(.bare) {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.bare:focus-visible {
+  outline: 2px solid var(--signal-spend);
+  outline-offset: 3px;
+}
+.value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chevron {
+  flex: none;
+  opacity: 0.7;
+  transition: transform 120ms ease;
+}
+[aria-expanded="true"] > .chevron {
+  transform: rotate(180deg);
+}
+
+/* The open list: a slip of paper with the ledger's offset shadow. */
+.popover {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ink-base);
+  background: var(--paper-raised);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--ink-base) 18%, transparent);
+  animation: select-in 110ms ease-out;
+}
+@keyframes select-in {
+  from { opacity: 0; transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .popover { animation: none; }
+  .chevron { transition: none; }
+}
+.search {
+  flex: none;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--rule-hair);
+  background: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--ink-base);
+}
+.search::placeholder {
+  color: var(--ink-faint);
+}
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0;
+  outline: none;
+}
+.groupLabel {
+  padding: 10px 12px 4px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-base);
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--sans);
+}
+.option[data-active] {
+  background: var(--paper-sunk);
+  box-shadow: inset 2px 0 0 var(--ink-base);
+}
+.option[aria-selected="true"] {
+  font-weight: 600;
+}
+.option[aria-disabled] {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.optLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tick {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.none {
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}

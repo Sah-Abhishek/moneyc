@@ -11,6 +11,7 @@ import type { WireSlip as Slip } from "@/server/services/wire";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
+import { Select } from "./ui/Select";
 import s from "./Wire.module.css";
 
 // One parsed mail on the desk. What the parser pulled out is highlighted so
@@ -267,18 +268,22 @@ function TagPicker({ tags, suggested, credit }: { tags: Tag[]; suggested?: Tag; 
   const tag = tags.find((t) => String(t.id) === id);
   const ordered = [...tags].sort((a, b) => (a.kind === (credit ? "income" : "spend") ? -1 : 1) - (b.kind === (credit ? "income" : "spend") ? -1 : 1));
   return (
-    <label className={tag ? `stamp ${s.picker}` : s.pickTag} data-color={tag?.color}>
-      <span className="sr-only">Tag</span>
-      <select name="tag" value={id} onChange={(e) => setId(e.target.value)}>
-        <option value="">{credit ? "No tag" : "Pick a tag"}</option>
-        {ordered.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
-          </option>
-        ))}
-      </select>
-      {!tag && <Image src="/icons/chevron-down.svg" alt="" width={9} height={9} />}
-    </label>
+    <Select
+      variant="bare"
+      className={tag ? `stamp ${s.picker}` : s.pickTag}
+      dataColor={tag?.color}
+      name="tag"
+      aria-label="Tag"
+      value={id}
+      onChange={setId}
+      chevron={!tag}
+      placeholder={credit ? "No tag" : "Pick a tag"}
+      options={[
+        { value: "", label: credit ? "No tag" : "No tag yet" },
+        ...ordered.map((t) => ({ value: String(t.id), label: t.name, color: t.color })),
+      ]}
+      renderValue={(o) => (o?.value ? o.label : credit ? "No tag" : "Pick a tag")}
+    />
   );
 }
 

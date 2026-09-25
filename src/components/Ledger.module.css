@@ -49,42 +49,34 @@
 .quickPayee::placeholder {
   color: var(--ink-muted);
 }
-.quickMode,
-.quickTag {
+.quick .quickMode,
+.quick .quickTag {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 10px 4px 8px;
   border: 1px dashed var(--ink-base);
-  cursor: pointer;
-}
-.quickMode select,
-.quickTag select {
-  field-sizing: content;
-  appearance: none;
-  border: 0;
-  background: none;
-  outline: none;
-  cursor: pointer;
   font-family: var(--mono);
   font-size: 9px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--ink-muted);
 }
-.quickMode:focus-within,
-.quickTag:focus-within {
-  outline: 2px solid var(--signal-spend);
-  outline-offset: 2px;
+.quick .quickTag:not([data-empty]) {
+  color: var(--ink-base);
 }
 /* The way paid reads as set, not asked: solid border, ink text. */
-.quickMode {
+.quick .quickMode {
   padding: 4px 8px;
   border-style: solid;
-}
-.quickMode select {
   color: var(--ink-base);
+}
+.quickTagName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .quickBreak {
   display: none;
@@ -312,9 +304,8 @@
     flex-basis: 100%;
     height: 0;
   }
-  .quickMode { order: 4; margin-left: 36px; }
-  .quickTag { order: 5; min-width: 0; }
-  .quickTag select { max-width: 30vw; text-overflow: ellipsis; }
+  .quick .quickMode { order: 4; margin-left: 36px; }
+  .quick .quickTag { order: 5; min-width: 0; max-width: 40vw; }
   .quickSubmit {
     order: 6;
     margin-left: auto;
@@ -393,10 +384,11 @@
   display: flex;
   gap: 6px;
 }
-.groupPick select {
+.groupPick {
   width: auto;
   min-height: 30px;
   padding: 4px 8px;
+  font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
