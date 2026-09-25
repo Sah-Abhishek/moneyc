@@ -64,7 +64,7 @@ Decisions worth knowing:
 - **The wire only reads bank mail.** The Gmail search is limited to known bank/wallet domains
   (`src/server/gmail/banks.ts`) plus senders you add as rules — or, when a user picks *Only these senders*
   in Settings, exactly their list (rules don't widen it). Adding a sender makes the next read look back
-  90 days so its recent mail arrives; mail already on the wire is never removed. Mail that isn't a transaction is recorded
+  to the signup day so its mail since then arrives; mail already on the wire is never removed. Mail that isn't a transaction is recorded
   as skipped with its text discarded. Google tokens are AES-256-GCM encrypted with `APP_SECRET`.
 - **Auto-filing is conservative.** It needs a complete parse and a known tag (or a "file" rule), and it
   never applies to likely duplicates, slate payments, or anything an "ask me first" rule matches.
@@ -83,7 +83,7 @@ Decisions worth knowing:
   functions and the Neon project in nearby regions (e.g. Mumbai / `bom1` with AWS `ap-south-1`).
 - **Mail sync** runs when a signed-in user has the app open (on load if stale, every 10 minutes while the
   tab is visible, or on demand). There is no background worker yet, so mail isn't read while nobody has the
-  app open — it catches up on the next visit (up to 90 days back on first sync).
+  app open — it catches up on the next visit. Mail from before the day the account was made is never read.
 - **Logs** are one JSON object per line on stdout/stderr (`wire.sync_done`, `action.failed` with a `ref`
   users see in error messages, `auth.*`).
 - **Health:** `GET /api/health` → 200 when the database is reachable and configuration is complete.

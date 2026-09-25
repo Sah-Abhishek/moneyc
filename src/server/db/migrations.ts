@@ -166,16 +166,23 @@ export const MIGRATIONS: string[] = [
   /* 2 — which senders the wire reads */ `
   -- Newline-separated addresses or domains. Empty = every bank in the built-in list.
   ALTER TABLE users ADD COLUMN mail_senders TEXT NOT NULL DEFAULT '';
-  -- Set when the sender list widens: the next read looks back FIRST_SYNC_DAYS
-  -- instead of from the last read, so the new senders' recent mail arrives too.
+  -- Set when the sender list widens: the next read looks back to signup
+  -- instead of from the last read, so the new senders' mail arrives too.
   ALTER TABLE sync_state ADD COLUMN rescan_requested_at TEXT;
   `,
   /* 3 — the parser learned UBI's and Jupiter's formats: read skipped mail again.
      Skipped rows hold no text (only the Gmail id, so they aren't fetched twice)
-     and nothing refers to them; forgetting them and rescanning the first-sync
-     window lets the sync fetch and parse them afresh. Repeat this whenever the
+     and nothing refers to them; forgetting them and rescanning from signup
+     lets the sync fetch and parse them afresh. Repeat this whenever the
      parser learns a new format. */ `
   DELETE FROM wire_mails WHERE status = 'skipped';
   UPDATE sync_state SET rescan_requested_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+  `,
+  /* 4 — the wire starts on the signup day. Mail read earlier from before that
+     day goes, unless it is part of the ledger (filed, or matched to a line). */ `
+  DELETE FROM wire_mails m USING users u
+  WHERE m.user_id = u.id
+    AND m.status NOT IN ('filed', 'duplicate')
+    AND m.received_at < to_char((u.created_at::timestamptz AT TIME ZONE u.timezone)::date, 'YYYY-MM-DD');
   `,
 ];

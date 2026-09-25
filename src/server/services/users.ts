@@ -76,8 +76,8 @@ export async function setAutoFile(ctx: Ctx, on: boolean) {
 
 /**
  * Sets which senders the wire reads (empty = every known bank). When the list
- * widens, the next read looks back over the first-sync window so recent mail
- * from the new senders arrives too. Mail already on the wire is never removed.
+ * widens, the next read looks back to the day the account was made so the new
+ * senders' mail since then arrives too. Mail already on the wire is never removed.
  */
 export function setMailSenders(ctx: Ctx, senders: string[]): Promise<{ widened: boolean }> {
   return withTx(ctx, async (ctx) => {

@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { startOfLocalDay } from "../../lib/dates.ts";
 import assert from "node:assert/strict";
 import { freshCtx, gmailMessage, tagId } from "../test-helpers.ts";
 import { createRule } from "../services/rules.ts";
@@ -73,25 +74,42 @@ test("sync reads only the chosen senders; widening the list rescans the first-sy
     await syncMailbox({ ctx, client, autoFile: true, force: true });
     return queries.at(-1)!;
   };
-  const afterDays = (q: string) => Math.round((Date.now() / 1000 - Number(q.match(/after:(\d+)/)![1])) / 86_400);
+  const afterDays = (q: string) => (Date.now() / 1000 - Number(q.match(/after:(\d+)/)![1])) / 86_400;
+  const fromSignup = (q: string) => afterDays(q) > 30 && afterDays(q) < 31; // back to local midnight on the signup day
+  await ctx.db.query("UPDATE users SET created_at = $1 WHERE id = $2", [new Date(Date.now() - 30 * 86_400_000).toISOString(), ctx.userId]);
 
-  assert.match(await read(), /hdfcbank\.net/);
+  assert.ok(fromSignup(await read()));
+  assert.match(queries.at(-1)!, /hdfcbank\.net/);
 
-  // Choosing a list is new to the search, so the next read looks back 90 days, then catches up normally.
+  // Choosing a list is new to the search, so the next read looks back to signup, then catches up normally.
   assert.deepEqual(await setMailSenders(ctx, ["noreplyubi-txn@ubi.bank.in"]), { widened: true });
   assert.deepEqual((await getUser(ctx.db, ctx.userId))!.mailSenders, ["noreplyubi-txn@ubi.bank.in"]);
   let q = await read();
   assert.match(q, /^from:\(noreplyubi-txn@ubi\.bank\.in\) /);
-  assert.equal(afterDays(q), 90);
+  assert.ok(fromSignup(q));
   assert.equal((await readSyncState(ctx.db, ctx.userId)).rescanRequestedAt, null);
-  assert.equal(afterDays(await read()), 2);
+  assert.equal(Math.round(afterDays(await read())), 2);
 
   // Narrowing never rescans; back to every bank does.
   assert.deepEqual(await setMailSenders(ctx, ["noreplyubi-txn@ubi.bank.in"]), { widened: false });
   assert.deepEqual(await setMailSenders(ctx, []), { widened: true });
   q = await read();
   assert.match(q, /hdfcbank\.net/);
-  assert.equal(afterDays(q), 90);
+  assert.ok(fromSignup(q));
+});
+
+test("the wire never reads mail from before the signup day", async () => {
+  const ctx = await freshCtx(); // signed up just now
+  const queries: string[] = [];
+  const client: GmailClient = { async list(q) { queries.push(q); return { ids: [] }; }, async get() { throw new Error("unused"); } };
+  await syncMailbox({ ctx, client, autoFile: true, force: true });
+  const after = Number(queries[0].match(/after:(\d+)/)![1]) * 1000;
+  const midnight = startOfLocalDay(ctx.tz, new Date()).getTime();
+  assert.equal(after, midnight);
+  // A later read's two-day overlap still stops at signup.
+  await ctx.db.query("UPDATE sync_state SET last_started_at = NULL", []);
+  await syncMailbox({ ctx, client, autoFile: true, force: true });
+  assert.equal(Number(queries[1].match(/after:(\d+)/)![1]) * 1000, midnight);
 });
 
 test("a deleted mail is never read back in from Gmail", async () => {

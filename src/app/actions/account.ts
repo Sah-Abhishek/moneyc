@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { act, db, SESSION_COOKIE } from "@/server/app";
 import { revokeGrant } from "@/server/auth/google";
 import { destroySession } from "@/server/auth/sessions";
-import { FIRST_SYNC_DAYS } from "@/server/gmail/sync";
 import { loadConfig } from "@/server/env";
 import { log } from "@/server/log";
 import { UserError } from "@/server/services/context";
@@ -37,7 +36,7 @@ export async function saveMailSendersAction(form: FormData) {
     const { widened } = await setMailSenders(ctx, senders);
     revalidatePath("/", "layout");
     const who = senders.length ? `only ${senders.length === 1 ? senders[0] : `${senders.length} senders`}` : "every bank we know";
-    return { ok: true, message: widened ? `Reading ${who}. The next read looks back ${FIRST_SYNC_DAYS} days.` : `Reading ${who}.` };
+    return { ok: true, message: widened ? `Reading ${who}. The next read looks back to the day you joined.` : `Reading ${who}.` };
   });
 }
 

@@ -1,4 +1,4 @@
-import { wallClock } from "../../lib/dates.ts";
+import { startOfLocalDay, wallClock } from "../../lib/dates.ts";
 import { parseMail } from "../../lib/wire/parse.ts";
 import { all, one, run, type Db } from "../db/index.ts";
 import { log } from "../log.ts";
@@ -8,7 +8,8 @@ import { addressOf, bankFor, buildQuery } from "./banks.ts";
 import type { GmailClient } from "./client.ts";
 import { header, messageText, type GmailMessage } from "./mime.ts";
 
-// Reads new bank alerts from Gmail onto the wire.
+// Reads new bank alerts from Gmail onto the wire, starting from the day the
+// account was made — never older mail.
 //
 //  - Idempotent: a Gmail message id is stored once per user (unique index), so
 //    re-running, overlapping windows or retries never create duplicates.
@@ -18,7 +19,6 @@ import { header, messageText, type GmailMessage } from "./mime.ts";
 //  - Private: mail that isn't a transaction alert is recorded as "skipped"
 //    with its body discarded, so it is never fetched again and never stored.
 
-export const FIRST_SYNC_DAYS = 90;
 const OVERLAP_MS = 2 * 86_400_000; // re-scan two days back; banks sometimes send late
 const LEASE_MS = 5 * 60_000;
 const MIN_INTERVAL_MS = 30_000; // automatic syncs
@@ -83,9 +83,12 @@ export async function syncMailbox({ ctx, client, autoFile, force = false }: Sync
   const started = Date.now();
   try {
     const state = await readSyncState(db, userId);
-    const since = state.lastSuccessAt && !state.rescanRequestedAt ? Date.parse(state.lastSuccessAt) - OVERLAP_MS : started - FIRST_SYNC_DAYS * 86_400_000;
+    const user = (await one<{ mail_senders: string; created_at: string }>(db, "SELECT mail_senders, created_at FROM users WHERE id = ?", [userId]))!;
+    // The wire starts on the day the account was made: mail from before then is never read.
+    const floor = startOfLocalDay(ctx.tz, new Date(user.created_at)).getTime();
+    const since = state.lastSuccessAt && !state.rescanRequestedAt ? Math.max(Date.parse(state.lastSuccessAt) - OVERLAP_MS, floor) : floor;
     const extraSenders = (await all<{ value: string }>(db, "SELECT value FROM rules WHERE user_id = ? AND field = 'sender'", [userId])).map((r) => r.value);
-    const only = (await one<{ mail_senders: string }>(db, "SELECT mail_senders FROM users WHERE id = ?", [userId]))?.mail_senders.split("\n").filter(Boolean) ?? [];
+    const only = user.mail_senders.split("\n").filter(Boolean);
     const q = buildQuery(extraSenders, since / 1000, only);
 
     // 1. Collect ids we haven't stored yet.

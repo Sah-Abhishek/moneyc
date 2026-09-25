@@ -23,6 +23,13 @@ const parts = (iso: string) => ({
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** The instant local midnight began, in `timeZone`, on the day that contains `at`. */
+export function startOfLocalDay(timeZone: string, at: Date): Date {
+  const wall = wallClock(timeZone, at);
+  const offsetMs = Date.parse(`${wall}Z`) - Math.floor(at.getTime() / 1000) * 1000;
+  return new Date(Date.parse(`${wall.slice(0, 10)}T00:00:00Z`) - offsetMs);
+}
+
 /** Current wall-clock time in `timeZone`, e.g. "2026-09-22T11:18:42". */
 export function wallClock(timeZone: string, at: Date = new Date()): string {
   const f = new Intl.DateTimeFormat("en-CA", {
