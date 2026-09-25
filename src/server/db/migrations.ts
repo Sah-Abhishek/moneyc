@@ -170,4 +170,12 @@ export const MIGRATIONS: string[] = [
   -- instead of from the last read, so the new senders' recent mail arrives too.
   ALTER TABLE sync_state ADD COLUMN rescan_requested_at TEXT;
   `,
+  /* 3 — the parser learned UBI's and Jupiter's formats: read skipped mail again.
+     Skipped rows hold no text (only the Gmail id, so they aren't fetched twice)
+     and nothing refers to them; forgetting them and rescanning the first-sync
+     window lets the sync fetch and parse them afresh. Repeat this whenever the
+     parser learns a new format. */ `
+  DELETE FROM wire_mails WHERE status = 'skipped';
+  UPDATE sync_state SET rescan_requested_at = to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+  `,
 ];

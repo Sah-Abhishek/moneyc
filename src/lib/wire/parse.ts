@@ -1,7 +1,8 @@
 // Parses Indian bank / UPI transaction-alert emails into ledger fields.
 //
 // Banks phrase these alerts differently but they share a vocabulary:
-// an amount after Rs./INR/₹, "debited"/"credited", a VPA or "Info:" payee,
+// an amount after Rs./INR/₹, "debited"/"credited", a VPA, "Info:" or
+// "Payee Name:" payee,
 // a reference number (UPI RRN, NEFT UTR, IMPS ref), a masked account and a
 // timestamp. Each extractor is independent so a slip can show exactly which
 // fields were found — the wire is a desk, not a feed.
@@ -35,13 +36,24 @@ function parseAmount(text: string): number | null {
   return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
 }
 
-function parseDirection(text: string): ParsedMail["direction"] {
-  const debit = text.search(/\b(debited|spent|paid|withdrawn|sent)\b/i);
-  const credit = text.search(/\b(credited|received|deposited|refunded)\b/i);
+function firstOf(text: string, debitRe: RegExp, creditRe: RegExp): ParsedMail["direction"] {
+  const debit = text.search(debitRe);
+  const credit = text.search(creditRe);
   if (debit === -1 && credit === -1) return null;
   if (credit === -1) return "debit";
   if (debit === -1) return "credit";
   return debit < credit ? "debit" : "credit";
+}
+
+function parseDirection(text: string): ParsedMail["direction"] {
+  // Verbs say what happened; failing those, a bare "Debit"/"Credit" label does
+  // ("DEBIT TRANSACTION ALERT", "Debit Account Number : *8501") — but never
+  // "debit card"/"credit card", which name the card, not the direction. The
+  // label only counts in a mail that also carries a reference or an account,
+  // so an offer of "₹100 credit" stays out of the book.
+  const verbs = firstOf(text, /\b(debited|spent|paid|withdrawn|sent)\b/i, /\b(credited|received|deposited|refunded)\b/i);
+  if (verbs || !/\b(?:RRN|UTR|reference|ref|transaction\s+id|a\/c|account)\b/i.test(text)) return verbs;
+  return firstOf(text, /\bdebit\b(?!\s+card)/i, /\bcredit\b(?!\s+card)/i);
 }
 
 function parseChannel(text: string): Channel {
@@ -72,6 +84,15 @@ function parsePayee(text: string, direction: ParsedMail["direction"]): string | 
   // "Info: PAYU*MERCHANT." / "Info- UPI-SWIGGY"
   const info = text.match(/\bInfo\s*[:\-]\s*([^\n.]+?)(?:\.\s|\.$|\n|$)/i);
   if (info) return info[1].replace(/^(UPI|IMPS|NEFT)[-/]/i, "").trim();
+  // Labelled fields: "Payee Name : AMRITA R 2. Amount : Rs. 10.00" (UBI lists
+  // details as numbered lines, which arrive here flattened onto one line).
+  const label = text.match(
+    /\b(?:Payee|Beneficiary|Merchant|Remitter)(?:\s+Name)?\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9 &*'./-]{0,59}?)\s*(?=\s\d{1,2}\.\s|\s(?:Amount|Channel|Transaction|Date|Account|Debit|Credit|Ref|UPI|VPA)\b|[.,;]\s|$)/i,
+  );
+  if (label) return label[1].trim();
+  // "Paid to ZOMATO LTD zomatoltd32.rzp@hdfcbank" (Jupiter)
+  const paidTo = text.match(/\bPaid\s+to\s+([A-Za-z0-9][A-Za-z0-9 &*'.-]{0,59}?)\s+\S+@\S+/i);
+  if (paidTo) return paidTo[1].trim();
   // "at SWIGGY on" / "at SWIGGY."
   const at = text.match(/\bat\s+([A-Z0-9][A-Z0-9 &*'._-]{1,40}?)(?:\s+on\s|\.\s|\.$|\n)/);
   if (at) return at[1].trim();
@@ -95,6 +116,10 @@ function parsePostedAt(text: string): string | null {
   m = text.match(/\b(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s,]+(\d{2,4})\b/);
   if (m && MONTHS[m[2].toLowerCase()])
     return `${year(m[3])}-${pad(MONTHS[m[2].toLowerCase()])}-${pad(+m[1])}T${hms}`;
+  // Aug 28, 2026
+  m = text.match(/\b([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})\b/);
+  if (m && MONTHS[m[1].toLowerCase()])
+    return `${m[3]}-${pad(MONTHS[m[1].toLowerCase()])}-${pad(+m[2])}T${hms}`;
   return null;
 }
 

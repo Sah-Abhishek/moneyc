@@ -186,27 +186,24 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
           </span>
         </div>
         <div className={s.slipActions}>
-          {!editing && (
-            <>
-              <ConfirmButton
-                label="Delete"
-                question="Delete this mail for good?"
-                confirmLabel="Delete"
-                className={`btn btn-line ${s.ignore}`}
-                pending={busy === "delete"}
-                onConfirm={() => run("delete", () => deleteSlipAction(slip.id))}
-              />
-              <button
-                type="button"
-                className={`btn btn-line ${s.ignore}`}
-                disabled={!!busy || pending}
-                title="Take it off the desk. You can put it back from the wire page."
-                onClick={() => run("archive", () => ignoreSlipAction(slip.id), () => restoreSlipAction(slip.id))}
-              >
-                {busy === "archive" ? "…" : "Archive"}
-              </button>
-            </>
-          )}
+          {/* Always offered: a slip the parser couldn't fully read opens in edit mode and must still be dismissable. */}
+          <ConfirmButton
+            label="Delete"
+            question="Delete this mail for good?"
+            confirmLabel="Delete"
+            className={`btn btn-line ${s.ignore}`}
+            pending={busy === "delete"}
+            onConfirm={() => run("delete", () => deleteSlipAction(slip.id))}
+          />
+          <button
+            type="button"
+            className={`btn btn-line ${s.ignore}`}
+            disabled={!!busy || pending}
+            title="Take it off the desk. You can put it back from the wire page."
+            onClick={() => run("archive", () => ignoreSlipAction(slip.id), () => restoreSlipAction(slip.id))}
+          >
+            {busy === "archive" ? "…" : "Archive"}
+          </button>
           {!incomplete && (
             <button type="button" className="btn btn-line" onClick={() => setEditing((e) => !e)} disabled={pending}>
               {editing ? "Cancel edit" : "Edit"}
