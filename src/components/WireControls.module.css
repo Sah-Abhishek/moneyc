@@ -1,0 +1,50 @@
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.label {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 34px;
+  height: 20px;
+  right: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.track {
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1.5px solid var(--ink-base);
+  background: var(--paper-raised);
+}
+.track span {
+  width: 14px;
+  height: 100%;
+  background: var(--ink-base);
+}
+.toggle input:checked + .track {
+  justify-content: flex-end;
+  background: var(--ink-base);
+}
+.toggle input:checked + .track span {
+  background: var(--paper-base);
+}
+.toggle input:focus-visible + .track {
+  outline: 2px solid var(--signal-spend);
+  outline-offset: 2px;
+}
+.toggle input:disabled + .track {
+  opacity: 0.5;
+}

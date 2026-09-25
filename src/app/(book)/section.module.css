@@ -1,0 +1,87 @@
+/* Shared layout for the section pages (wire, tags, budgets, rules, settings…). */
+
+.narrow {
+  max-width: 560px;
+}
+.block {
+  margin-top: 40px;
+}
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 48px;
+  align-items: start;
+}
+.panel {
+  padding: 20px;
+  border: 1px solid var(--ink-base);
+  background: var(--paper-raised);
+}
+.panelTitle {
+  margin-bottom: 14px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.list {
+  list-style: none;
+  border-top: 1px solid var(--ink-base);
+}
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-hair);
+}
+.listMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.listTitle {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.listMeta {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+.listStatus {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.listStatus[data-status="filed"] { color: var(--signal-credit); }
+.listStatus[data-status="ignored"] { color: var(--ink-faint); }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1000px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  .listRow {
+    flex-wrap: wrap;
+  }
+}

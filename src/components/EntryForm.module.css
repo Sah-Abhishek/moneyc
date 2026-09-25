@@ -1,0 +1,94 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 640px;
+}
+
+.amountBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 16px 18px;
+  background: var(--paper-sunk);
+  border-top: 3px solid var(--ink-base);
+  border-bottom: 1px solid var(--ink-base);
+  color: var(--ink-faint);
+}
+.amountLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+.rupee {
+  font-family: var(--mono);
+  font-size: 28px;
+  color: var(--ink-muted);
+}
+.amount {
+  width: 100%;
+  max-width: 360px;
+  border: 0;
+  background: none;
+  outline: none;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--ink-base);
+  caret-color: var(--signal-spend);
+}
+.amount::placeholder {
+  color: color-mix(in srgb, var(--ink-base) 25%, transparent);
+}
+
+.how {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.how select {
+  width: auto;
+}
+.slateRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.readonly {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  word-break: break-all;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.submit {
+  padding: 14px 22px;
+}
+.danger {
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .amount {
+    font-size: 56px;
+  }
+  .submit {
+    flex: 1 0 100%;
+  }
+  .danger {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,65 @@
+.chart {
+  position: relative;
+  height: 126px;
+}
+
+.bars {
+  list-style: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 100%;
+}
+
+.day {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bar {
+  width: 100%;
+  background: color-mix(in srgb, var(--paper-base) 26%, transparent);
+}
+.bar[data-hot] {
+  background: var(--signal-spend-bright);
+}
+
+.day:hover .bar {
+  outline: 1px solid var(--paper-base);
+}
+
+/* Tooltip: the day and its spend, in the bank's voice. */
+.day[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 7px;
+  background: var(--paper-base);
+  color: var(--ink-base);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  z-index: 2;
+  pointer-events: none;
+}
+.day:first-child:hover::after { left: 0; transform: none; }
+.day:last-child:hover::after { left: auto; right: 0; transform: none; }
+
+.avg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--paper-base) 45%, transparent);
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .chart { height: 72px; }
+  .bars { gap: 3px; }
+}

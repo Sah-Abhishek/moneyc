@@ -1,0 +1,426 @@
+.ledger {
+  min-width: 0;
+  padding-bottom: 30px;
+}
+
+/* ─── The blank line ─────────────────────────────────────────── */
+
+.quick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 13px;
+  background: var(--paper-sunk);
+  border: 1px dashed var(--ink-base);
+}
+.quick:focus-within {
+  border-style: solid;
+}
+.quickPlus {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  background: var(--ink-base);
+}
+.quickDate {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  white-space: nowrap;
+}
+.quickRule {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  background: var(--ink-base);
+}
+.quickPayee {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 14px;
+}
+.quickPayee::placeholder {
+  color: var(--ink-muted);
+}
+.quickTag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border: 1px dashed var(--ink-base);
+  cursor: pointer;
+}
+.quickTag select {
+  field-sizing: content;
+  appearance: none;
+  border: 0;
+  background: none;
+  outline: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.quickTag:focus-within {
+  outline: 2px solid var(--signal-spend);
+  outline-offset: 2px;
+}
+.quickAmount {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 104px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 14px;
+}
+.quickAmount input {
+  field-sizing: content;
+  width: 7ch;
+  min-width: 4ch;
+  border: 0;
+  background: none;
+  outline: none;
+  text-align: right;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.quickAmount input::placeholder {
+  color: var(--ink-base);
+}
+.quickAmount > span:first-child {
+  color: var(--ink-faint);
+}
+.quickError {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 51px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--signal-spend);
+}
+
+/* ─── The table ──────────────────────────────────────────────── */
+
+.head,
+.row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) 126px 126px 112px;
+  align-items: center;
+}
+
+.head {
+  padding: 22px 0 9px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.num {
+  text-align: right;
+}
+
+.rows {
+  list-style: none;
+}
+.row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--rule-hair);
+}
+.row:hover {
+  background: linear-gradient(90deg, transparent, var(--paper-raised) 8%, var(--paper-raised) 92%, transparent);
+}
+
+.dayHead {
+  display: none;
+}
+
+.date {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+}
+.time {
+  font-weight: 400;
+  font-size: 9px;
+  color: var(--ink-faint);
+}
+
+.payee {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 22px;
+}
+.payeeLine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.payeeName {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.untagged {
+  padding: 4px 9px;
+  border: 1px dashed var(--ink-faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.metaSm {
+  display: none;
+}
+
+.amount {
+  text-align: right;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+}
+.amount[data-credit] {
+  color: var(--signal-credit);
+}
+.balance {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--ink-faint);
+}
+
+.empty {
+  padding: 36px 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--rule-hair);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 18px;
+}
+.pager {
+  display: flex;
+  gap: 6px;
+}
+.pagerGroup {
+  display: flex;
+  gap: 6px;
+}
+.pager [aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+@media (max-width: 1100px) {
+  .head,
+  .row {
+    grid-template-columns: 70px minmax(0, 1fr) 126px 110px 90px;
+  }
+}
+
+/* Mobile: the row becomes two lines — payee/amount over tag/balance —
+   and rows sit under day headers. */
+@media (max-width: 720px) {
+  .quick {
+    gap: 12px;
+    padding: 13px;
+    margin: 0 var(--gutter);
+  }
+  .quickDate,
+  .quickTag,
+  .hideSm {
+    display: none;
+  }
+  .quickAmount { min-width: 0; }
+  .quickSubmit {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .ledger :global(.section-head) {
+    padding: 22px var(--gutter) 14px;
+  }
+  .ledger :global(.section-head h2) {
+    font-size: 26px;
+  }
+
+  .head { display: none; }
+  .ledger > :global(.rule) { display: none; }
+
+  .dayHead {
+    display: flex;
+    justify-content: space-between;
+    padding: 22px var(--gutter) 10px;
+    border-bottom: 1px solid var(--ink-faint);
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .dayHead span:last-child {
+    font-weight: 400;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "payee amount"
+      "tag balance";
+    row-gap: 8px;
+    padding: 16px var(--gutter);
+  }
+  .date,
+  .meta {
+    display: none;
+  }
+  .payee { grid-area: payee; padding-right: 12px; }
+  .payeeName { font-size: 16px; }
+  .tag { grid-area: tag; }
+  .metaSm {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--ink-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .amount { grid-area: amount; font-size: 16px; }
+  .balance { grid-area: balance; font-size: 10px; }
+
+  .foot {
+    justify-content: center;
+    padding: 18px var(--gutter) 0;
+  }
+  .foot > :global(.caption) { display: none; }
+}
+
+/* ─── additions: month nav, row links, slate marker ─────────────── */
+
+.headControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.months {
+  display: flex;
+  gap: 6px;
+}
+.row {
+  position: relative;
+}
+.payeeName:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* The whole row opens the line; the payee link stretches over it. */
+.payeeName::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.onSlate,
+.untagged {
+  position: relative;
+  z-index: 1;
+}
+.onSlate {
+  padding: 4px 9px;
+  border: 1px solid var(--ink-base);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+a.untagged:hover {
+  border-color: var(--ink-base);
+  color: var(--ink-base);
+}
+.addPast {
+  display: block;
+  padding: 14px 13px;
+  border: 1px dashed var(--ink-base);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.addPast:hover {
+  background: var(--paper-sunk);
+}
+@media (max-width: 720px) {
+  .headControls { gap: 8px; }
+  .addPast { margin: 0 var(--gutter); }
+}
+
+.tagFilter {
+  align-self: center;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.tagFilter:hover {
+  text-decoration: line-through;
+}

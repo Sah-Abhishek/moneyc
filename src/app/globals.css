@@ -1,40 +1,56 @@
+/* Money Control — Ledger Broadsheet.
+   Tokens mirror the Figma variable collection "Money Control" (14 tokens). */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper-base: #f4f1e8;
+  --paper-raised: #fbf9f3;
+  --paper-sunk: #eae5d7;
+  --rule-hair: #d8d2c0;
+  --ink-faint: #8f8b79;
+  --ink-muted: #5c594b;
+  --ink-base: #16150f;
+
+  --signal-spend: #d8401c;
+  --signal-spend-bright: #f2613c;
+  --signal-credit: #2e5d3f;
+  --signal-pending: #b8860f;
+  --signal-indigo: #3b4b7c;
+  --signal-plum: #6e3a57;
+  --signal-teal: #1f5f5b;
+
+  --serif: var(--font-serif), "Times New Roman", serif;
+  --sans: var(--font-sans), system-ui, sans-serif;
+  --mono: var(--font-mono), ui-monospace, monospace;
+
+  --gutter: 56px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@media (max-width: 1100px) {
+  :root { --gutter: 32px; }
+}
+@media (max-width: 720px) {
+  :root { --gutter: 22px; }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper-base);
+  color: var(--ink-base);
+  font-family: var(--sans);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 a {
@@ -42,8 +58,396 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+  border-radius: 0;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal-spend);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ─── Type voices ─────────────────────────────────────────────── */
+
+.serif {
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+/* Eyebrow: the small uppercase mono label that heads every block. */
+.eyebrow {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.caption {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ─── Rules ───────────────────────────────────────────────────── */
+
+.rule {
+  height: 1px;
+  background: var(--ink-base);
+  border: 0;
+}
+
+.rule-hair {
+  height: 1px;
+  background: var(--rule-hair);
+  border: 0;
+}
+
+/* The heavy-over-light double rule under the masthead. */
+.double-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.double-rule::before,
+.double-rule::after {
+  content: "";
+  background: var(--ink-base);
+}
+.double-rule::before { height: 3px; }
+.double-rule::after { height: 1px; }
+.double-rule.flip::before { height: 1px; }
+.double-rule.flip::after { height: 3px; }
+
+/* ─── Chips & buttons — radius 0 everywhere ───────────────────── */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--ink-base);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.chip[aria-current="true"],
+.chip[aria-pressed="true"] {
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-weight: 500;
+}
+.chip:hover:not([aria-current="true"]):not([aria-pressed="true"]) {
+  background: var(--paper-sunk);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 10px 15px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid var(--ink-base);
+  white-space: nowrap;
+}
+.btn-ink {
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-weight: 600;
+}
+.btn-ink:hover { background: #2c2a20; }
+.btn-line:hover { background: var(--paper-sunk); }
+.btn:disabled { opacity: 0.5; cursor: progress; }
+
+/* ─── Tag stamp — tinted fill, tinted border, solid swatch ────── */
+
+.stamp {
+  --c: var(--ink-base);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  color: var(--c);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.stamp::before,
+.swatch {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--c);
+}
+.stamp[data-color="ink"] {
+  background: color-mix(in srgb, var(--ink-base) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ink-base) 45%, transparent);
+}
+
+[data-color="spend"] { --c: var(--signal-spend); }
+[data-color="ink"] { --c: var(--ink-base); }
+[data-color="pending"] { --c: var(--signal-pending); }
+[data-color="plum"] { --c: var(--signal-plum); }
+[data-color="teal"] { --c: var(--signal-teal); }
+[data-color="indigo"] { --c: var(--signal-indigo); }
+[data-color="credit"] { --c: var(--signal-credit); }
+[data-color="faint"] { --c: var(--ink-faint); }
+
+/* AUTO badge beside a payee filed from the wire. */
+.auto-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 6px;
+  background: color-mix(in srgb, var(--signal-spend-bright) 18%, transparent);
+  color: var(--signal-spend);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+/* Section header: serif title + mono dek, optional controls on the right. */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 26px 0 20px;
+}
+.section-head h2 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 13px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 31px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.section-head h2 small {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chip,
+  .btn {
+    transition: background-color 120ms ease-out;
   }
+}
+
+.btn-danger {
+  background: var(--signal-spend);
+  border-color: var(--signal-spend);
+  color: var(--paper-base);
+  font-weight: 600;
+}
+.btn-danger:hover { background: #b93514; }
+button.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+a.chip[aria-disabled="true"] { pointer-events: none; opacity: 0.45; }
+
+/* ─── Forms — ruled lines, not boxes ──────────────────────────── */
+
+.form-rows {
+  display: flex;
+  flex-direction: column;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 54px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-hair);
+}
+.form-row > label,
+.form-row > .form-label {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--rule-hair);
+  background: var(--paper-raised);
+  font-size: 15px;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--ink-base);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ink-base);
+}
+.input[aria-invalid="true"],
+.select[aria-invalid="true"] {
+  border-color: var(--signal-spend);
+}
+.input.mono,
+.select.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.hint {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
+}
+
+/* Segmented choice (UPI / CARD / CASH, money out / in) built on radios. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+.segmented label {
+  position: relative;
+  cursor: pointer;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+.segmented span {
+  display: inline-block;
+  padding: 8px 14px;
+  margin-left: -1px;
+  border: 1px solid var(--ink-base);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.segmented input:checked + span {
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-weight: 600;
+}
+.segmented input:focus-visible + span {
+  outline: 2px solid var(--signal-spend);
+  outline-offset: 2px;
+}
+
+/* Page scaffolding for the section pages (tags, rules, settings…). */
+.page {
+  padding: 0 var(--gutter) 64px;
+}
+.page-lede {
+  max-width: 62ch;
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+.empty-state {
+  padding: 36px 0;
+  border-bottom: 1px solid var(--rule-hair);
+}
+.empty-state h3 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1.1;
+}
+.empty-state p {
+  max-width: 56ch;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+.empty-state .btn {
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    align-items: start;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--paper-sunk), color-mix(in srgb, var(--paper-sunk) 50%, var(--paper-base)), var(--paper-sunk));
+  background-size: 200% 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+@keyframes shimmer {
+  to { background-position: -200% 0; }
 }

@@ -1,0 +1,275 @@
+.section {
+  padding: 0 var(--gutter) 38px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 0 32px;
+}
+.col:first-child { padding-left: 0; }
+.col:last-child { padding-right: 0; }
+.col + .col {
+  border-left: 1px solid var(--rule-hair);
+}
+
+/* ─── Six months ─────────────────────────────────────────────── */
+
+.months {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.months li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.monthRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.monthName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  color: var(--ink-muted);
+}
+.thisMonth {
+  font-weight: 400;
+  font-size: 8px;
+  color: var(--signal-spend);
+  text-transform: uppercase;
+}
+.monthFig {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.track {
+  height: 8px;
+  background: var(--rule-hair);
+}
+.track span {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--ink-base) 55%, var(--paper-base));
+}
+.months li[data-current] .monthName {
+  color: var(--ink-base);
+  font-weight: 600;
+}
+.months li[data-current] .monthFig {
+  color: var(--ink-base);
+  font-weight: 500;
+}
+.months li[data-current] .track span {
+  background: var(--signal-spend);
+}
+
+/* ─── Calendar ───────────────────────────────────────────────── */
+
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.calRow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 51px));
+  gap: 5px;
+}
+.weekday {
+  padding-bottom: 4px;
+  text-align: center;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  color: var(--ink-faint);
+}
+.cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 34px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--ink-base);
+}
+.cell[data-level="none"],
+.cell[data-level="0"] {
+  background: color-mix(in srgb, var(--rule-hair) 60%, transparent);
+  color: var(--ink-faint);
+}
+.cell[data-level="1"],
+.key[data-level="1"] { background: color-mix(in srgb, var(--signal-spend) 18%, var(--paper-base)); }
+.cell[data-level="2"],
+.key[data-level="2"] { background: color-mix(in srgb, var(--signal-spend) 32%, var(--paper-base)); }
+.cell[data-level="3"],
+.key[data-level="3"] { background: color-mix(in srgb, var(--signal-spend) 48%, var(--paper-base)); }
+.cell[data-level="4"],
+.key[data-level="4"] { background: color-mix(in srgb, var(--signal-spend) 70%, var(--paper-base)); color: var(--paper-base); }
+.cell[data-level="5"],
+.key[data-level="5"] { background: var(--signal-spend); color: var(--paper-base); }
+
+.cell[data-tip]:hover {
+  outline: 1px solid var(--ink-base);
+  z-index: 1;
+}
+.cell[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 7px;
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.key {
+  width: 16px;
+  height: 10px;
+}
+.legendRule {
+  width: 1px;
+  height: 10px;
+  background: var(--rule-hair);
+}
+.busiest {
+  color: var(--ink-muted);
+}
+
+/* ─── Merchants ──────────────────────────────────────────────── */
+
+.merchants {
+  gap: 0;
+}
+.merchHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+}
+.merchants ol {
+  list-style: none;
+}
+.merchants li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--rule-hair);
+}
+.rank {
+  width: 14px;
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.merchName {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.merchName > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merchMeta {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--ink-faint);
+}
+.merchFig {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 12px;
+}
+.seeAll {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 14px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 32px;
+  }
+  .merchants {
+    grid-column: 1 / -1;
+    padding: 0;
+    border-left: 0 !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .col {
+    padding: 0;
+    border-left: 0 !important;
+  }
+}
+
+.months[data-dense] {
+  gap: 8px;
+}
+.months[data-dense] .track {
+  height: 5px;
+}
+.merchName a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.merchEmpty {
+  padding: 16px 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}

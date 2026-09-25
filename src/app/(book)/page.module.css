@@ -1,0 +1,50 @@
+.body {
+  padding: 0 var(--gutter) 12px;
+}
+
+/* Ledger on the left, the wire in a 424px right column, a hairline between. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 424px;
+}
+.columns > :first-child {
+  padding-right: 32px;
+  border-right: 1px solid var(--rule-hair);
+}
+.columns > :last-child {
+  padding-left: 32px;
+}
+
+@media (max-width: 1100px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  .columns > :first-child {
+    padding-right: 0;
+    border-right: 0;
+  }
+  .columns > :last-child {
+    padding-left: 0;
+    border-top: 1px solid var(--ink-base);
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  .body {
+    padding: 0;
+  }
+  .bodyRule {
+    display: none;
+  }
+  .columns > :last-child {
+    padding-inline: var(--gutter);
+  }
+}
+
+@media (max-width: 720px) {
+  /* On phones the wire has its own tab; the ledger shows the alert strip instead. */
+  .wireColumn {
+    display: none;
+  }
+}

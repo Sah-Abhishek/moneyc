@@ -1,0 +1,223 @@
+.masthead {
+  padding-top: 30px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 var(--gutter) 20px;
+}
+
+.wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.issue {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.title {
+  font-family: var(--serif);
+  font-size: 40px;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.utilities {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.dateline {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.faint {
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+.divider {
+  width: 1px;
+  height: 30px;
+  background: var(--rule-hair);
+}
+.live {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px 8px 11px;
+  border: 1px solid color-mix(in srgb, var(--signal-spend) 40%, transparent);
+  background: color-mix(in srgb, var(--signal-spend-bright) 14%, transparent);
+  color: var(--signal-spend);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.live[data-state="syncing"] {
+  cursor: progress;
+}
+.live[data-state="warn"] {
+  border-color: color-mix(in srgb, var(--signal-pending) 60%, transparent);
+  background: color-mix(in srgb, var(--signal-pending) 14%, transparent);
+  color: var(--signal-pending);
+}
+.live[data-state="off"] {
+  cursor: default;
+  border-color: var(--rule-hair);
+  background: none;
+  color: var(--ink-faint);
+}
+.live:hover:not([data-state="off"]) {
+  border-color: var(--signal-spend);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .live[data-state="syncing"] img {
+    animation: pulse 0.9s ease-in-out infinite;
+  }
+  .live img {
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+}
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-family: var(--serif);
+  font-size: 19px;
+}
+
+.sectionLine {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 var(--gutter);
+}
+
+.nav {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.navItem {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.navItem::after {
+  content: "";
+  height: 3px;
+}
+.navItem[aria-current="page"] {
+  color: var(--ink-base);
+  font-weight: 600;
+}
+.navItem[aria-current="page"]::after {
+  background: var(--signal-spend);
+}
+.navItem:hover:not([aria-current="page"])::after {
+  background: var(--rule-hair);
+}
+.navLabel {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.badge {
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  background: var(--signal-spend);
+  color: var(--paper-base);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 9px;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 232px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ink-base);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.search input::placeholder {
+  color: var(--ink-faint);
+}
+
+.showSm { display: none; }
+
+@media (max-width: 1100px) {
+  .dateline { display: none; }
+  .divider { display: none; }
+  .search { width: 170px; }
+}
+
+@media (max-width: 900px) {
+  .actions { display: none; }
+}
+
+@media (max-width: 720px) {
+  .masthead { padding-top: 16px; }
+  .top { padding-bottom: 14px; }
+  .title { font-size: 30px; }
+  .issue { font-size: 8px; }
+  .utilities { gap: 10px; }
+  .live { padding: 6px 9px; font-size: 9px; }
+  .hideSm { display: none; }
+  .showSm { display: inline; }
+  .nav { gap: 22px; }
+  .navItem { font-size: 10px; padding-top: 14px; }
+}

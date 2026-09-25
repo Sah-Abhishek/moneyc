@@ -1,0 +1,94 @@
+.toasts {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 12px 12px 16px;
+  background: var(--ink-base);
+  color: var(--paper-base);
+  font-size: 13px;
+  box-shadow: 0 1px 0 var(--ink-base), 4px 4px 0 color-mix(in srgb, var(--ink-base) 18%, transparent);
+}
+.toast[data-tone="error"] {
+  background: var(--signal-spend);
+}
+.toast > span {
+  flex: 1;
+}
+.toastAction {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--signal-spend-bright);
+  padding: 4px 2px;
+}
+.toast[data-tone="error"] .toastAction {
+  color: var(--paper-base);
+  text-decoration: underline;
+}
+.toastClose {
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--paper-base) 60%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: rise 180ms ease-out;
+  }
+}
+@keyframes rise {
+  from { transform: translateY(8px); opacity: 0; }
+}
+
+@media (max-width: 720px) {
+  .toasts {
+    left: 16px;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    max-width: none;
+  }
+}
+
+.confirm {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.confirmQ {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--signal-spend);
+}
+
+.fieldError {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--signal-spend);
+}
+.formError {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--signal-spend) 50%, transparent);
+  background: color-mix(in srgb, var(--signal-spend-bright) 10%, transparent);
+  color: var(--ink-base);
+  font-size: 13px;
+  line-height: 1.45;
+}
