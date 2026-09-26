@@ -52,7 +52,8 @@ export default async function WirePage() {
                 <span className={s.listMain}>
                   <span className={s.listTitle}>{d.parsed.payee ?? d.subject ?? "Unreadable mail"}</span>
                   <span className={s.listMeta}>
-                    {d.bank} · {dayMonth(d.receivedAt)} {clock12(d.receivedAt)}
+                    {d.bank}
+                    {d.parsed.account && ` ****${d.parsed.account}`} · {dayMonth(d.receivedAt)} {clock12(d.receivedAt)}
                     {d.parsed.amountPaise != null && ` · ₹${rupeesExact(d.parsed.amountPaise)}`}
                   </span>
                 </span>

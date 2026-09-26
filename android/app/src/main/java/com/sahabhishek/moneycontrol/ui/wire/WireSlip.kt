@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sahabhishek.moneycontrol.R
 import com.sahabhishek.moneycontrol.data.Filing
+import com.sahabhishek.moneycontrol.data.api.ParsedMail
 import com.sahabhishek.moneycontrol.data.api.Rule
 import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.data.api.WireSlip
@@ -173,6 +174,7 @@ fun WireSlipCard(
             FieldError(fieldErrors["amount"])
           } else Found(p.amountPaise?.let { "₹ ${rupeesExact(it)}" })
         }
+        Field(accountLabel(p)) { Found(p.account?.let { "${slip.bank} ****$it" }) }
         Field(if (p.channel == "Cheque") "Cheque no." else "Ref / RRN") { Found(p.ref?.let(::maskRef)) }
         Field("Posted") { Text(posted(slip.occurredAt), style = mono(11.sp, spacing = 0.01), color = c.inkBase) }
       }
@@ -282,6 +284,14 @@ fun WireSlipCard(
 @Composable
 private fun Badge(text: String, fg: Color, bg: Color) =
   Text(text.uppercase(), Modifier.background(bg).padding(start = 7.dp, end = 8.dp, top = 3.dp, bottom = 3.dp), style = mono(8.sp, FontWeight.Medium, 0.11), color = fg)
+
+/** Which of your accounts the money moved through, named by the way it moved. */
+private fun accountLabel(p: ParsedMail) = when {
+  p.channel == "Card" -> "Card"
+  p.direction == "credit" -> "Into account"
+  p.direction == "debit" -> "From account"
+  else -> "Account"
+}
 
 @Composable
 private fun Field(label: String, first: Boolean = false, content: @Composable () -> Unit) = Column {

@@ -220,7 +220,7 @@ private fun Decided(decided: List<WireSlip>, busyId: Long?, vm: WireViewModel) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
           Text(d.parsed.payee ?: d.subject ?: "Unreadable mail", style = sans(14.sp, FontWeight.SemiBold), color = c.inkBase, maxLines = 1, overflow = TextOverflow.Ellipsis)
           Text(
-            "${d.bank} · ${dayMonth(d.receivedAt)} ${clock12(d.receivedAt)}" + (d.parsed.amountPaise?.let { " · ₹${rupeesExact(it)}" } ?: ""),
+            "${d.bank}${d.parsed.account?.let { " ****$it" } ?: ""} · ${dayMonth(d.receivedAt)} ${clock12(d.receivedAt)}" + (d.parsed.amountPaise?.let { " · ₹${rupeesExact(it)}" } ?: ""),
             style = mono(9.5.sp, spacing = 0.02),
             color = c.inkFaint,
           )

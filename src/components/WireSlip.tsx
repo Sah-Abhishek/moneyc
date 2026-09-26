@@ -133,6 +133,9 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
               <Found value={p.amountPaise != null ? `₹ ${rupeesExact(p.amountPaise)}` : null} />
             )}
           </Field>
+          <Field label={accountLabel(p)}>
+            <Found value={p.account ? `${slip.bank} ****${p.account}` : null} />
+          </Field>
           <Field label={p.channel === "Cheque" ? "Cheque no." : "Ref / RRN"}>
             <Found value={p.ref ? maskRef(p.ref) : null} />
           </Field>
@@ -257,6 +260,12 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <dd>{children}</dd>
     </div>
   );
+}
+
+/** Which of your accounts the money moved through, named by the way it moved. */
+function accountLabel(p: Slip["parsed"]) {
+  if (p.channel === "Card") return "Card";
+  return p.direction === "credit" ? "Into account" : p.direction === "debit" ? "From account" : "Account";
 }
 
 function Found({ value }: { value: string | null }) {
