@@ -22,7 +22,7 @@ import { createTag, deleteTag, listTags, mergeTags, saveBudgets, tagUsage, updat
 import { closeAccount, getUser, setAutoFile, setMailSenders, updateSettings, upsertGoogleUser, type User } from "../services/users.ts";
 import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail, waitingCount, wireStats } from "../services/wire.ts";
 import {
-  amountField, cashChoice, entryInput, idField, mailSendersInput, parseBudgets, parseInput, personInput, quickEntryInput, ruleInput, settingsInput, slateLineInput, tagGroupInput, tagInput,
+  amountField, cashChoice, entryInput, idField, itemField, mailSendersInput, parseBudgets, parseInput, personInput, quickEntryInput, ruleInput, settingsInput, slateLineInput, tagGroupInput, tagInput,
 } from "../validation.ts";
 
 // JSON API for the Android app: /api/v1/…
@@ -160,7 +160,7 @@ on("GET", "entries", async (c) => {
 on("GET", "entries/:id", async (c) => ({ data: await getEntry(c.ctx, id(c, "Line")) }));
 
 const entryFields = (b: Record<string, unknown>) =>
-  ({ ...Object.fromEntries(["payee", "direction", "occurredAt", "channel", "tagId", "note", "chequeNo", "cash"].map((k) => [k, b[k] ?? undefined])), amount: str(b.amount) });
+  ({ ...Object.fromEntries(["payee", "direction", "occurredAt", "channel", "tagId", "item", "note", "chequeNo", "cash"].map((k) => [k, b[k] ?? undefined])), amount: str(b.amount) });
 
 on("POST", "entries", async (c) => {
   const input = parseInput(entryInput, entryFields(c.body));
@@ -172,7 +172,7 @@ on("POST", "entries", async (c) => {
 // The one-line form: "+2500" is money in.
 on("POST", "entries/quick", async (c) => {
   const input = parseInput(quickEntryInput, {
-    payee: c.body.payee, amount: str(c.body.amount), tagId: c.body.tagId ?? "", channel: c.body.channel, clientKey: c.body.clientKey,
+    payee: c.body.payee, item: c.body.item, amount: str(c.body.amount), tagId: c.body.tagId ?? "", channel: c.body.channel, clientKey: c.body.clientKey,
   });
   const { entry, duplicate } = await addQuickEntry(c.ctx, input);
   return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
@@ -234,6 +234,7 @@ on("POST", "wire/:id/file", async (c) => {
   const entry = await fileMail(c.ctx, id(c, "Mail"), {
     payee: editing ? field("payee", z.string().trim().min(1, "Who was it?").max(120), str(c.body.payee)) : null,
     amount: editing ? field("amount", amountField, str(c.body.amount)) : null,
+    item: field("item", itemField, c.body.item),
     tagId: c.body.tagId == null || c.body.tagId === "" ? null : field("tagId", idField("Tag"), c.body.tagId),
     personId,
     cash: c.body.cash == null || c.body.cash === "" ? null : field("cash", cashChoice, c.body.cash),

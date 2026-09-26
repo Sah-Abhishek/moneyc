@@ -24,6 +24,9 @@ const optionalText = (label: string, max: number) =>
     .pipe(z.string().max(max, `${label} must be ${max} characters or fewer`))
     .transform((s) => s || null);
 
+/** what the money was for ("Biscuits"); a form or body that leaves it out means none */
+export const itemField = z.preprocess((v) => v ?? undefined, optionalText("What for", 120));
+
 export const amountField = z
   .string({ error: "Enter an amount" })
   .transform((s, ctx) => {
@@ -67,6 +70,7 @@ export const entryInput = z
     occurredAt: wallClockField,
     channel: z.enum(CHANNELS, { error: "Choose how it was paid" }),
     tagId: optionalId,
+    item: itemField,
     note: optionalText("Note", 280),
     /** the number printed on a cheque; kept as the line's reference */
     chequeNo: optionalText("Cheque number", 12).refine((s) => !s || /^\d{4,12}$/.test(s), "Enter the cheque number, digits only (6 on most cheques)"),
@@ -91,6 +95,7 @@ export type EntryInput = z.infer<typeof entryInput>;
 
 export const quickEntryInput = z.object({
   payee: text("Payee", 120),
+  item: itemField,
   /** a leading + means money in */
   amount: z
     .string({ error: "Enter an amount" })

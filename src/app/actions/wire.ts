@@ -5,7 +5,7 @@ import { act, runSync } from "@/server/app";
 import { UserError } from "@/server/services/context";
 import { setAutoFile } from "@/server/services/users";
 import { deleteMail, fileMail, ignoreMail, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail } from "@/server/services/wire";
-import { amountField, cashChoice, idField, parseInput } from "@/server/validation";
+import { amountField, cashChoice, idField, itemField, parseInput } from "@/server/validation";
 import { z } from "zod";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -19,6 +19,7 @@ export async function fileSlipAction(form: FormData) {
     const entry = await fileMail(ctx, mailId, {
       payee: editing ? parseInput(z.string().trim().min(1, "Who was it?").max(120), form.get("payee")) : null,
       amount: editing ? parseInput(amountField, form.get("amount")) : null,
+      item: parseInput(itemField, form.get("item")),
       tagId: tagRaw ? parseInput(idField("Tag"), tagRaw) : null,
       personId: personRaw ? parseInput(idField("Person"), personRaw) : null,
       cash: form.get("cash") ? parseInput(cashChoice, form.get("cash")) : null,

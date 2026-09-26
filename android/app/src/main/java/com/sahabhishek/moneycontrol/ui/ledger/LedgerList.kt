@@ -94,6 +94,8 @@ data class LedgerQuery(val ym: String, val filter: String = "all", val q: String
 /** The quick line's typing, owned by the view model so a failed add keeps it. */
 data class QuickLine(
   val payee: String = "",
+  /** what it was for; never required */
+  val item: String = "",
   val amount: String = "",
   /** how it was paid; remembered on the device, Cash until another is picked */
   val mode: String = "Cash",
@@ -195,16 +197,18 @@ private fun GroupPicker(groups: List<TagGroup>, current: Long?, onPick: (TagGrou
 }
 
 /**
- * QuickEntry.tsx at the phone layout, two rows: "+ Who did you pay?  ₹ 0.00",
- * then paid-by, tag and ADD LINE (ADDING… while it saves). Enter adds too.
+ * QuickEntry.tsx at the phone layout, three rows: "+ Who did you pay?  ₹ 0.00",
+ * "What for?", then paid-by, tag and ADD LINE (ADDING… while it saves). Enter adds too.
  */
 @Composable
 private fun QuickEntry(quick: QuickLine, tags: List<Tag>, onChange: (QuickLine) -> Unit, onAdd: () -> Unit) {
   val c = Ledger.colors
   val source = remember { MutableInteractionSource() }
   val amountSource = remember { MutableInteractionSource() }
-  val focused = source.collectIsFocusedAsState().value || amountSource.collectIsFocusedAsState().value
+  val itemSource = remember { MutableInteractionSource() }
+  val focused = source.collectIsFocusedAsState().value || amountSource.collectIsFocusedAsState().value || itemSource.collectIsFocusedAsState().value
   val amountFocus = remember { FocusRequester() }
+  val itemFocus = remember { FocusRequester() }
   Column(Modifier.padding(horizontal = Gutter)) {
     Column(
       Modifier.fillMaxWidth().background(c.paperSunk).dashedBorder(solid = focused).padding(13.dp),
@@ -228,7 +232,7 @@ private fun QuickEntry(quick: QuickLine, tags: List<Tag>, onChange: (QuickLine) 
           cursorBrush = SolidColor(c.inkBase),
           interactionSource = source,
           keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-          keyboardActions = KeyboardActions(onNext = { amountFocus.requestFocus() }),
+          keyboardActions = KeyboardActions(onNext = { itemFocus.requestFocus() }),
           decorationBox = { inner -> Box { if (quick.payee.isEmpty()) Text("Who did you pay?", style = sans(14.sp), color = c.inkMuted); inner() } },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -252,6 +256,18 @@ private fun QuickEntry(quick: QuickLine, tags: List<Tag>, onChange: (QuickLine) 
           )
         }
       }
+      BasicTextField(
+        quick.item,
+        { if (it.length <= 120) onChange(quick.copy(item = it, error = null)) },
+        Modifier.fillMaxWidth().padding(start = 36.dp).focusRequester(itemFocus).semantics { contentDescription = "What for?" },
+        textStyle = sans(14.sp, color = c.inkBase),
+        singleLine = true,
+        cursorBrush = SolidColor(c.inkBase),
+        interactionSource = itemSource,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+        keyboardActions = KeyboardActions(onNext = { amountFocus.requestFocus() }),
+        decorationBox = { inner -> Box { if (quick.item.isEmpty()) Text("What for?", style = sans(14.sp), color = c.inkMuted); inner() } },
+      )
       Row(
         Modifier.fillMaxWidth().padding(start = 36.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -369,6 +385,7 @@ private fun LedgerRow(e: Entry, onOpen: (Entry) -> Unit, onSlate: (Long) -> Unit
       Row(verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
           Text(e.payee, Modifier.weight(1f, fill = false), style = sans(16.sp, FontWeight.SemiBold, spacing = -0.005), color = c.inkBase, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          e.item?.let { Text(it, Modifier.weight(1f, fill = false), style = sans(14.sp), color = c.inkMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
           if (e.source == "wire") AutoBadge(e.auto)
         }
         // Cash moved to the wallet: shown, but it isn't spending.
@@ -422,7 +439,7 @@ private fun Empty(bookIsEmpty: Boolean, q: LedgerQuery, ym: String, onClear: () 
   )
   q.q != null -> EmptyState(
     "Nothing matches “${q.q}”.",
-    body = "Search looks at payee names, notes, references and accounts in ${monthTitle(ym)}. Try another month or a shorter word.",
+    body = "Search looks at payee names, what things were for, notes, references and accounts in ${monthTitle(ym)}. Try another month or a shorter word.",
     action = { Btn("Clear search", onClear) },
   )
   q.tag != null || q.group != null || q.filter != "all" -> EmptyState(

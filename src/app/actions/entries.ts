@@ -7,12 +7,12 @@ import { entryInput, idField, parseInput, quickEntryInput } from "@/server/valid
 import { z } from "zod";
 
 const refresh = () => revalidatePath("/", "layout");
-const ENTRY_FIELDS = ["payee", "amount", "direction", "occurredAt", "channel", "tagId", "note", "chequeNo", "cash"];
+const ENTRY_FIELDS = ["payee", "amount", "direction", "occurredAt", "channel", "tagId", "item", "note", "chequeNo", "cash"];
 
 export async function addLineAction(form: FormData) {
   return act<{ id: number }>("entries.quick", async ({ ctx }) => {
     const input = parseInput(quickEntryInput, {
-      payee: form.get("payee"), amount: form.get("amount"), tagId: form.get("tag"), channel: form.get("channel"), clientKey: form.get("clientKey"),
+      payee: form.get("payee"), item: form.get("item"), amount: form.get("amount"), tagId: form.get("tag"), channel: form.get("channel"), clientKey: form.get("clientKey"),
     });
     const { entry, duplicate } = await addQuickEntry(ctx, input);
     refresh();

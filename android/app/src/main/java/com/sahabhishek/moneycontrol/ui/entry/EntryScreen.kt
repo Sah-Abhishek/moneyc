@@ -170,9 +170,25 @@ private fun EntryForm(state: EntryState, vm: EntryViewModel, nav: Nav, isNew: Bo
       FormRow("Money") {
         Segmented(listOf("out" to "Went out", "in" to "Came in"), f.direction, { d -> vm.edit { it.copy(direction = d) } })
       }
-      FormRow("Paid to") {
-        WebInput(f.payee, { v -> vm.edit { it.copy(payee = v) } }, placeholder = "Who, or what for", invalid = err["payee"] != null, maxLength = 120)
+      FormRow(if (f.direction == "in") "From" else "Paid to") {
+        WebInput(
+          f.payee,
+          { v -> vm.edit { it.copy(payee = v) } },
+          placeholder = if (f.direction == "in") "Who paid you" else "Who you paid · e.g. Madan Stores",
+          invalid = err["payee"] != null,
+          maxLength = 120,
+        )
         FieldError(err["payee"])
+      }
+      FormRow("What for") {
+        WebInput(
+          f.item,
+          { v -> vm.edit { it.copy(item = v) } },
+          placeholder = if (f.direction == "in") "Optional · e.g. salary, refund" else "What you bought · e.g. biscuits",
+          invalid = err["item"] != null,
+          maxLength = 120,
+        )
+        FieldError(err["item"])
       }
       FormRow("When") {
         DateTimeField(f.occurredAt, err["occurredAt"] != null) { v -> vm.edit { it.copy(occurredAt = v) } }

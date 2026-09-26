@@ -7,7 +7,7 @@ export async function monthCsv(ctx: Ctx, month: string): Promise<{ filename: str
   if (!YM.test(month)) throw new UserError("Choose a month as YYYY-MM.", { month: "Choose a month" });
   const rows = await all<Record<string, string | number | null>>(
     ctx.db,
-    `SELECT e.occurred_at, e.payee, e.amount, e.channel, e.ref, e.account, e.note, t.name AS tag, p.name AS person, e.source,
+    `SELECT e.occurred_at, e.payee, e.amount, e.channel, e.ref, e.account, e.note, e.item, t.name AS tag, p.name AS person, e.source,
        CASE WHEN e.to_wallet THEN 'yes' ELSE '' END AS to_wallet
      FROM entries e LEFT JOIN tags t ON t.id = e.tag_id LEFT JOIN people p ON p.id = e.person_id
      WHERE e.user_id = ? AND e.deleted_at IS NULL AND substr(e.occurred_at, 1, 7) = ?
@@ -21,9 +21,9 @@ export async function monthCsv(ctx: Ctx, month: string): Promise<{ filename: str
     if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const header = ["date", "payee", "amount_inr", "channel", "reference", "account", "note", "tag", "slate_person", "source", "cash_to_wallet"];
+  const header = ["date", "payee", "amount_inr", "channel", "reference", "account", "note", "tag", "slate_person", "source", "cash_to_wallet", "what_for"];
   const lines = rows.map((r) =>
-    [r.occurred_at, r.payee, Number((Number(r.amount) / 100).toFixed(2)), r.channel, r.ref, r.account, r.note, r.tag, r.person, r.source, r.to_wallet].map(cell).join(","),
+    [r.occurred_at, r.payee, Number((Number(r.amount) / 100).toFixed(2)), r.channel, r.ref, r.account, r.note, r.tag, r.person, r.source, r.to_wallet, r.item].map(cell).join(","),
   );
   return { filename: `money-control-${month}.csv`, csv: `﻿${[header.join(","), ...lines].join("\r\n")}\r\n`, rows: rows.length };
 }

@@ -111,7 +111,7 @@ class LedgerViewModel(
     if (line.pending) return
     _state.update { it.copy(quick = line.copy(pending = true, error = null)) }
     viewModelScope.launch {
-      when (val r = book.quick(line.payee, line.amount, line.tagId, line.mode, clientKey)) {
+      when (val r = book.quick(line.payee, line.item, line.amount, line.tagId, line.mode, clientKey)) {
         is ApiResult.Failure -> _state.update { it.copy(quick = it.quick.copy(pending = false, error = r.error)) }
         is ApiResult.Ok -> {
           clientKey = UUID.randomUUID().toString()

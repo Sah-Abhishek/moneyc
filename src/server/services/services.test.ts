@@ -212,6 +212,29 @@ test("edited payee/amount win over what was parsed", async () => {
   assert.equal(e.amount, -1500);
 });
 
+test("what the money was for is kept apart from the payee and the note, and is searchable", async () => {
+  const ctx = await freshCtx();
+  const mail = await insertMail(ctx, HDFC);
+  const filed = await fileMail(ctx, mail, { tagId: null, item: "  Biscuits " });
+  assert.equal(filed.payee, "VINOD SI");
+  assert.equal(filed.item, "Biscuits");
+  assert.equal(filed.note, null);
+
+  const hand = await addEntry(ctx, line({ payee: "Madan Stores", item: "Milk", note: "for the week" }), key());
+  assert.equal(hand.entry.item, "Milk");
+  assert.equal(hand.entry.note, "for the week");
+  const cleared = await updateEntry(ctx, hand.entry.id, line({ payee: "Madan Stores", item: "" }), hand.entry.version);
+  assert.equal(cleared.item, null);
+
+  const quick = await addQuickEntry(ctx, parseInput(quickEntryInput, { payee: "Madan", item: "Bread", amount: "15", tagId: "", clientKey: key() }));
+  assert.equal(quick.entry.item, "Bread");
+  const bare = await addQuickEntry(ctx, parseInput(quickEntryInput, { payee: "Madan", item: null, amount: "15", tagId: "", clientKey: key() }));
+  assert.equal(bare.entry.item, null);
+
+  assert.equal((await listEntries(ctx, { ym: "2026-09", filter: "all", q: "biscuit", page: 1 })).total, 1);
+  assert.throws(() => line({ item: "x".repeat(121) }), UserError);
+});
+
 test("archive and restore move a mail off and back onto the desk", async () => {
   const ctx = await freshCtx();
   const mail = await insertMail(ctx, HDFC);

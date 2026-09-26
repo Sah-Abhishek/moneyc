@@ -114,7 +114,7 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
         </div>
 
         <div className="form-row">
-          <label htmlFor="ef-payee">Paid to</label>
+          <label htmlFor="ef-payee">{direction === "in" ? "From" : "Paid to"}</label>
           <div>
             <input
               id="ef-payee"
@@ -123,11 +123,29 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               defaultValue={entry?.payee}
               maxLength={120}
               autoComplete="off"
-              placeholder="Who, or what for"
+              placeholder={direction === "in" ? "Who paid you" : "Who you paid · e.g. Madan Stores"}
               aria-invalid={!!err("payee") || undefined}
               aria-describedby={describedBy("payee")}
             />
             <FieldError id="err-payee" message={err("payee")} />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="ef-item">What for</label>
+          <div>
+            <input
+              id="ef-item"
+              name="item"
+              className="input"
+              defaultValue={entry?.item ?? ""}
+              maxLength={120}
+              autoComplete="off"
+              placeholder={direction === "in" ? "Optional · e.g. salary, refund" : "What you bought · e.g. biscuits"}
+              aria-invalid={!!err("item") || undefined}
+              aria-describedby={describedBy("item")}
+            />
+            <FieldError id="err-item" message={err("item")} />
           </div>
         </div>
 

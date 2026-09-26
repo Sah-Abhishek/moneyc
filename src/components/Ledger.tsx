@@ -184,7 +184,7 @@ function Empty({ bookIsEmpty, q, filter, ym, clearHref }: { bookIsEmpty: boolean
     return (
       <div className="empty-state">
         <h3>Nothing matches “{q}”.</h3>
-        <p>Search looks at payee names, notes, references and accounts in {monthTitle(ym)}. Try another month or a shorter word.</p>
+        <p>Search looks at payee names, what things were for, notes, references and accounts in {monthTitle(ym)}. Try another month or a shorter word.</p>
         <Link className="btn btn-line" href={clearHref}>
           Clear search
         </Link>
@@ -233,6 +233,7 @@ function Row({ e }: { e: Entry }) {
           <Link href={`/entries/${e.id}`} className={s.payeeName}>
             {e.payee}
           </Link>
+          {e.item && <span className={s.item}>{e.item}</span>}
           {e.source === "wire" && (
             <span className="auto-badge" title={e.auto ? "Filed automatically from your bank mail" : "Confirmed from your bank mail"}>
               <Image src="/icons/auto-dot.svg" alt="" width={4} height={4} />

@@ -9,7 +9,8 @@ import { useToast } from "./ui/Toaster";
 import { callAction, newKey, useSubmit } from "./ui/useSubmit";
 import s from "./Ledger.module.css";
 
-// Rule 02: the blank line is always ready. Payee + amount, Enter, done.
+// Rule 02: the blank line is always ready. Payee + amount, Enter, done;
+// what it was for is there to fill in but never required.
 // A leading "+" records money coming in. The line is dated now and paid the
 // way chosen beside it (Cash until another is picked; the last choice is
 // remembered on this device); open it afterwards to change anything.
@@ -100,6 +101,20 @@ export function QuickEntry({ today, tags }: { today: string; tags: Tag[] }) {
         maxLength={120}
         required
         aria-invalid={!!fieldErrors.payee || undefined}
+        aria-describedby={error ? "ql-error" : undefined}
+      />
+      <span className={`${s.quickRule} ${s.hideSm}`} aria-hidden />
+      <label className="sr-only" htmlFor="ql-item">
+        What for?
+      </label>
+      <input
+        id="ql-item"
+        name="item"
+        className={`${s.quickPayee} ${s.quickItem}`}
+        placeholder="What for?"
+        autoComplete="off"
+        maxLength={120}
+        aria-invalid={!!fieldErrors.item || undefined}
         aria-describedby={error ? "ql-error" : undefined}
       />
       <span className={`${s.quickRule} ${s.hideSm}`} aria-hidden />

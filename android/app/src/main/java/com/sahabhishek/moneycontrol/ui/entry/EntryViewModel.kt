@@ -23,6 +23,8 @@ data class LineForm(
   val amount: String = "",
   val direction: String = "out",
   val payee: String = "",
+  /** what the money was for */
+  val item: String = "",
   val occurredAt: String = "",
   val channel: String = "UPI",
   val tagId: Long? = null,
@@ -105,6 +107,7 @@ class EntryViewModel(
     amount = rupeesExact(e.amount),
     direction = if (e.amount > 0) "in" else "out",
     payee = e.payee,
+    item = e.item.orEmpty(),
     occurredAt = e.occurredAt.take(16),
     channel = e.channel,
     tagId = e.tag?.id,
@@ -125,6 +128,7 @@ class EntryViewModel(
       f.payee, f.amount, f.direction, f.occurredAt, f.channel,
       tagId = if (f.toWallet) null else f.tagId,
       note = f.note,
+      item = f.item,
       // A line from the wire keeps the number the bank mailed.
       chequeNo = f.chequeNo.takeIf { f.channel == "Cheque" && s.entry?.source != "wire" },
       cash = f.cash.takeIf { f.cashOut },

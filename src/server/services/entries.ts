@@ -9,7 +9,7 @@ export const PAGE_SIZE = 20;
 
 interface EntryRow {
   id: number; occurred_at: string; payee: string; amount: number; channel: string;
-  ref: string | null; account: string | null; note: string | null; tag_id: number | null;
+  ref: string | null; account: string | null; item: string | null; note: string | null; tag_id: number | null;
   source: "hand" | "wire"; auto: boolean; person_id: number | null; person_name: string | null;
   to_wallet: boolean; version: number; balance: number;
 }
@@ -18,7 +18,7 @@ async function mapRows(ctx: Ctx, rows: EntryRow[]): Promise<Entry[]> {
   const tags = await tagMap(ctx);
   return rows.map((r) => ({
     id: r.id, occurredAt: r.occurred_at, payee: r.payee, amount: r.amount, channel: r.channel,
-    ref: r.ref, account: r.account, note: r.note, source: r.source, auto: r.auto,
+    ref: r.ref, account: r.account, item: r.item, note: r.note, source: r.source, auto: r.auto,
     personId: r.person_id, personName: r.person_name, toWallet: r.to_wallet, version: r.version, balance: r.balance,
     tag: r.tag_id == null ? null : tags.get(r.tag_id) ?? null,
   }));
@@ -55,7 +55,7 @@ export async function listEntries(
     params.group = opts.groupId;
   }
   if (opts.q) {
-    where.push("(payee ILIKE :q ESCAPE '\\' OR note ILIKE :q ESCAPE '\\' OR ref ILIKE :q ESCAPE '\\' OR account ILIKE :q ESCAPE '\\')");
+    where.push("(payee ILIKE :q ESCAPE '\\' OR item ILIKE :q ESCAPE '\\' OR note ILIKE :q ESCAPE '\\' OR ref ILIKE :q ESCAPE '\\' OR account ILIKE :q ESCAPE '\\')");
     params.q = `%${likeEscape(opts.q)}%`;
   }
   const filtered = `${BOOK} SELECT * FROM book WHERE ${where.join(" AND ")}`;
@@ -79,10 +79,10 @@ export async function hasAnyEntries(ctx: Ctx): Promise<boolean> {
   return !!await one(ctx.db, "SELECT 1 FROM entries WHERE user_id = ? AND deleted_at IS NULL LIMIT 1", [ctx.userId]);
 }
 
-/** The blank first line of the ledger: payee + amount (+ optional tag and way paid, Cash by default), dated now. */
+/** The blank first line of the ledger: payee + amount (+ optional what for, tag and way paid, Cash by default), dated now. */
 export function addQuickEntry(
   ctx: Ctx,
-  input: { payee: string; amount: { incoming: boolean; raw: number }; tagId: number | null; channel?: EntryInput["channel"]; clientKey: string },
+  input: { payee: string; item?: string | null; amount: { incoming: boolean; raw: number }; tagId: number | null; channel?: EntryInput["channel"]; clientKey: string },
 ): Promise<{ entry: Entry; duplicate: boolean }> {
   return addEntry(
     ctx,
@@ -93,6 +93,7 @@ export function addQuickEntry(
       occurredAt: wallClock(ctx.tz),
       channel: input.channel ?? "Cash",
       tagId: input.tagId,
+      item: input.item ?? null,
       note: null,
       ref: null,
       toWallet: false,
@@ -113,10 +114,10 @@ export function addEntry(ctx: Ctx, input: EntryInput, clientKey: string): Promis
     const now = nowUtc();
     const id = await insertId(
       ctx.db,
-      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, note, tag_id, to_wallet, source, client_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'hand', ?, ?, ?)`,
+      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, item, note, tag_id, to_wallet, source, client_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'hand', ?, ?, ?)`,
       [ctx.userId, input.occurredAt, input.payee, input.direction === "in" ? input.amount : -input.amount,
-        input.channel, input.ref, input.note, input.tagId, input.toWallet, clientKey, now, now],
+        input.channel, input.ref, input.item, input.note, input.tagId, input.toWallet, clientKey, now, now],
     );
     return { entry: await getEntry(ctx, id), duplicate: false };
   });
@@ -143,9 +144,9 @@ export function updateEntry(ctx: Ctx, id: number, input: EntryInput, expectedVer
     const ref = current.source === "wire" ? current.ref : input.ref;
     await run(
       ctx.db,
-      `UPDATE entries SET occurred_at = ?, payee = ?, amount = ?, channel = ?, ref = ?, note = ?, tag_id = ?, to_wallet = ?, updated_at = ?,
+      `UPDATE entries SET occurred_at = ?, payee = ?, amount = ?, channel = ?, ref = ?, item = ?, note = ?, tag_id = ?, to_wallet = ?, updated_at = ?,
          version = version + 1, corrected = auto WHERE id = ? AND user_id = ?`,
-      [input.occurredAt, input.payee, amount, input.channel, ref, input.note, input.tagId, input.toWallet, nowUtc(), id, ctx.userId],
+      [input.occurredAt, input.payee, amount, input.channel, ref, input.item, input.note, input.tagId, input.toWallet, nowUtc(), id, ctx.userId],
     );
     // A ledger line that moved money on the slate keeps the slate in step.
     await run(ctx.db, "UPDATE slate_lines SET amount = ?, occurred_at = ? WHERE entry_id = ? AND user_id = ?", [-amount, input.occurredAt, id, ctx.userId]);

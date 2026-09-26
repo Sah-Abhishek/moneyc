@@ -135,6 +135,8 @@ const STATUS_CONFLICT: Record<MailStatus, string> = {
 
 export interface FileOptions {
   payee?: string | null;
+  /** what the money was for ("Biscuits"); the payee stays who was paid */
+  item?: string | null;
   amount?: number | null;
   tagId: number | null;
   /** put the payment on this person's slate instead of treating it as spending/income */
@@ -168,13 +170,13 @@ export function fileMail(ctx: Ctx, mailId: number, opts: FileOptions, refs?: Wir
     const now = nowUtc();
     const id = await insertId(
       ctx.db,
-      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, account, tag_id, to_wallet, source, auto, mail_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wire', ?, ?, ?, ?)`,
+      `INSERT INTO entries (user_id, occurred_at, payee, amount, channel, ref, account, item, tag_id, to_wallet, source, auto, mail_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'wire', ?, ?, ?, ?)`,
       [
         ctx.userId, slip.occurredAt, payee, slip.parsed.direction === "credit" ? amount : -amount,
         slip.parsed.channel === "Other" ? "Bank" : slip.parsed.channel, slip.parsed.ref,
         slip.parsed.account ? `${bankShort} ****${slip.parsed.account}` : null,
-        tagId, toWallet, opts.auto ?? false, mailId, now, now,
+        opts.item?.trim() || null, tagId, toWallet, opts.auto ?? false, mailId, now, now,
       ],
     );
     if (opts.personId) {

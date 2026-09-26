@@ -49,6 +49,10 @@
 .quickPayee::placeholder {
   color: var(--ink-muted);
 }
+/* What for: a little narrower than who, which is always asked first. */
+.quickItem {
+  flex: 0.8;
+}
 .quick .quickMode,
 .quick .quickTag {
   position: relative;
@@ -193,6 +197,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.item {
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .meta {
   font-family: var(--mono);
   font-size: 10px;
@@ -290,7 +302,7 @@
   .hideSm {
     display: none;
   }
-  /* Two rows: + payee ₹amount, then paid-by, tag and the button. */
+  /* Three rows: + payee ₹amount, what for, then paid-by, tag and the button. */
   .quick {
     flex-wrap: wrap;
     row-gap: 10px;
@@ -298,6 +310,8 @@
   .quickPlus { order: 0; }
   .quickPayee { order: 1; }
   .quickAmount { order: 2; min-width: 0; }
+  /* What for gets a row of its own, under who, lined up with it. */
+  .quick .quickItem { order: 3; flex-basis: calc(100% - 36px); margin-left: 36px; }
   .quickBreak {
     display: block;
     order: 3;

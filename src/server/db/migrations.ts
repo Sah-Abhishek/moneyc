@@ -210,4 +210,9 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX tag_group_tags_tag ON tag_group_tags(tag_id);
   `,
+  /* 6 — what the money was for */ `
+  -- "Biscuits" when the payee is the shop: what was bought, kept apart from
+  -- who was paid and from the free-form note.
+  ALTER TABLE entries ADD COLUMN item TEXT;
+  `,
 ];

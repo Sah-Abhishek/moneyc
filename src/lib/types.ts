@@ -38,6 +38,8 @@ export interface Entry {
   channel: string;
   ref: string | null;
   account: string | null;
+  /** what the money was for ("Biscuits"), apart from who was paid */
+  item: string | null;
   note: string | null;
   tag: Tag | null;
   source: "hand" | "wire";

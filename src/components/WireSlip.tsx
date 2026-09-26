@@ -116,6 +116,19 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
               <Found value={p.payee} />
             )}
           </Field>
+          <Field label="What for">
+            {/* The mail only knows who was paid; what it bought is always yours to write. */}
+            <input
+              name="item"
+              className={s.edit}
+              maxLength={120}
+              autoComplete="off"
+              placeholder={credit ? "Optional · e.g. refund" : "What you bought · e.g. biscuits"}
+              aria-label="What for"
+              aria-invalid={!!fieldErrors.item || undefined}
+            />
+            <FieldError id={`item-${slip.id}`} message={fieldErrors.item} />
+          </Field>
           <Field label="Amount">
             {editing ? (
               <>

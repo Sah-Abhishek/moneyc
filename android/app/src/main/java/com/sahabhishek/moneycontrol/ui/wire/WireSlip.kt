@@ -88,6 +88,7 @@ fun WireSlipCard(
   val incomplete = slip.incomplete
   var editing by rememberSaveable(slip.id) { mutableStateOf(incomplete) }
   var payee by rememberSaveable(slip.id) { mutableStateOf(p.payee.orEmpty()) }
+  var item by rememberSaveable(slip.id) { mutableStateOf("") }
   var amount by rememberSaveable(slip.id) { mutableStateOf(p.amountPaise?.let(::rupeesExact).orEmpty()) }
   var toSlate by rememberSaveable(slip.id) { mutableStateOf(slip.person != null) }
   var dismissedDuplicate by rememberSaveable(slip.id) { mutableStateOf(false) }
@@ -167,6 +168,11 @@ fun WireSlipCard(
             SlipInput(payee, { payee = it }, fieldErrors["payee"] != null, "Payee")
             FieldError(fieldErrors["payee"])
           } else Found(p.payee)
+        }
+        // The mail only knows who was paid; what it bought is always yours to write.
+        Field("What for") {
+          SlipInput(item, { item = it }, fieldErrors["item"] != null, "What for", placeholder = if (p.isCredit) "Optional · e.g. refund" else "What you bought · e.g. biscuits")
+          FieldError(fieldErrors["item"])
         }
         Field("Amount") {
           if (editing) {
@@ -266,6 +272,7 @@ fun WireSlipCard(
                 personId = if (toSlate) person?.id else null,
                 payee = if (editing) payee else null,
                 amount = if (editing) amount else null,
+                item = item,
                 cash = if (atm && !toSlate) cash else null,
               ),
             )
@@ -311,7 +318,7 @@ private fun Found(value: String?) {
 }
 
 @Composable
-private fun SlipInput(value: String, onChange: (String) -> Unit, invalid: Boolean, label: String, keyboard: KeyboardType = KeyboardType.Text) {
+private fun SlipInput(value: String, onChange: (String) -> Unit, invalid: Boolean, label: String, keyboard: KeyboardType = KeyboardType.Text, placeholder: String? = null) {
   val c = Ledger.colors
   BasicTextField(
     value,
@@ -321,6 +328,7 @@ private fun SlipInput(value: String, onChange: (String) -> Unit, invalid: Boolea
     singleLine = true,
     cursorBrush = SolidColor(c.inkBase),
     keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+    decorationBox = { inner -> Box { if (value.isEmpty() && placeholder != null) Text(placeholder, style = mono(11.sp, FontWeight.Medium), color = c.inkFaint); inner() } },
   )
 }
 
