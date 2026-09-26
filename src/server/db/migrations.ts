@@ -215,4 +215,10 @@ export const MIGRATIONS: string[] = [
   -- who was paid and from the free-form note.
   ALTER TABLE entries ADD COLUMN item TEXT;
   `,
+  /* 7 — a promise to pay back the rest */ `
+  -- "Paid 1,800 of 2,000, the rest by 5 Oct": the day (YYYY-MM-DD, the
+  -- owner's calendar) the open balance was promised by. Cleared once the
+  -- account is square.
+  ALTER TABLE people ADD COLUMN promised_by TEXT;
+  `,
 ];

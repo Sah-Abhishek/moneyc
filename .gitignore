@@ -42,4 +42,4 @@ yarn-error.log*
 next-env.d.ts
 
 # old local SQLite database (pre-Postgres); keep out of git
-data/
+/data/

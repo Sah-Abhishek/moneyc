@@ -1,16 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
-import { clock, dayMonth, dayMonthYear } from "@/lib/dates";
+import { clock, dayMonth, dayMonthYear, daysBetween } from "@/lib/dates";
 import { rupees } from "@/lib/money";
 import { maskRef } from "@/lib/wire/parse";
 import type { Account, SlateLine } from "@/server/services/slate";
-import { DeleteSlateLine, PersonEditor, RemindButton, SettleUpButton, SlateLineForm } from "./SlateActions";
+import { ClearPromise, DeleteSlateLine, PersonEditor, RemindButton, SettleUp, SlateLineForm } from "./SlateActions";
 import s from "./slate.module.css";
 
 export function OpenAccount({ account, lines, others, now }: { account: Account; lines: SlateLine[]; others: Account[]; now: string }) {
   const b = account.balance;
   const newestFirst = [...lines].reverse();
   const matched = lines.filter((l) => l.fromWire).length;
+  const late = account.promisedBy && account.promisedBy < now.slice(0, 10) ? daysBetween(account.promisedBy, now) : 0;
 
   return (
     <section className={s.accountSection} id="account" aria-labelledby="account-title">
@@ -116,15 +117,21 @@ export function OpenAccount({ account, lines, others, now }: { account: Account;
                 <span className="swatch" /> {account.ageDays} days
               </span>
             )}
+            {account.promisedBy && (
+              <span className={s.promise} data-late={late > 0 || undefined}>
+                {b > 0 ? "Promised back by" : "You said by"} {dayMonth(account.promisedBy)}
+                {late > 0 && ` · ${late} day${late === 1 ? "" : "s"} late`}
+                <ClearPromise personId={account.id} />
+              </span>
+            )}
           </div>
           <div className={s.cardActions}>
             <a className="btn btn-ink" href="#record">
               Record a payment
             </a>
-            <div className={s.cardActionRow}>
+            <SettleUp key={b} personId={account.id} name={account.name} balance={b} now={now}>
               {b > 0 && <RemindButton className="btn btn-line" personId={account.id} name={account.name} age={account.ageDays ?? 0} />}
-              <SettleUpButton personId={account.id} name={account.name} balance={b} now={now} />
-            </div>
+            </SettleUp>
           </div>
           <div className={s.linked}>
             <p className="eyebrow">Linked to the wire</p>

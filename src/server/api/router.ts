@@ -14,7 +14,7 @@ import { addEntry, addQuickEntry, deleteEntry, getEntry, hasAnyEntries, listEntr
 import { monthCsv } from "../services/export.ts";
 import { createRule, deleteRule, listRules, moveRule, updateRule } from "../services/rules.ts";
 import {
-  addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, listAccounts, openAccount, remind, setArchived, slateStats, unlinkEntry, updatePerson,
+  addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, listAccounts, openAccount, remind, setArchived, setPromise, settleUp, slateStats, unlinkEntry, updatePerson,
 } from "../services/slate.ts";
 import { bookTotals, groupReports, merchants, monthlySpend, monthSummary, type Range } from "../services/summary.ts";
 import { createGroup, deleteGroup, getGroup, listGroups, updateGroup } from "../services/tagGroups.ts";
@@ -22,7 +22,7 @@ import { createTag, deleteTag, listTags, mergeTags, saveBudgets, tagUsage, updat
 import { closeAccount, getUser, setAutoFile, setMailSenders, updateSettings, upsertGoogleUser, type User } from "../services/users.ts";
 import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail, waitingCount, wireStats } from "../services/wire.ts";
 import {
-  amountField, cashChoice, entryInput, idField, itemField, mailSendersInput, parseBudgets, parseInput, personInput, quickEntryInput, ruleInput, settingsInput, slateLineInput, tagGroupInput, tagInput,
+  amountField, cashChoice, entryInput, idField, itemField, mailSendersInput, parseBudgets, parseInput, personInput, promiseInput, quickEntryInput, ruleInput, settingsInput, settleInput, slateLineInput, tagGroupInput, tagInput,
 } from "../validation.ts";
 
 // JSON API for the Android app: /api/v1/…
@@ -419,6 +419,22 @@ on("POST", "slate/:id/lines", async (c) => {
     personId, amount: str(c.body.amount), direction: c.body.direction, occurredAt: c.body.occurredAt, note: c.body.note, clientKey: c.body.clientKey,
   }));
   return { status: r.duplicate ? 200 : 201, data: await getAccount(c.ctx, personId), message: r.duplicate ? "That line was already recorded." : "Recorded on the slate." };
+});
+
+/** Settle up in full, or in part with the rest (maybe) promised by a day. */
+on("POST", "slate/:id/settle", async (c) => {
+  const personId = id(c, "Person");
+  const r = await settleUp(c.ctx, parseInput(settleInput, {
+    personId, amount: str(c.body.amount), promisedBy: c.body.promisedBy, occurredAt: c.body.occurredAt, clientKey: c.body.clientKey,
+  }));
+  return { status: r.duplicate ? 200 : 201, data: await getAccount(c.ctx, personId), message: r.duplicate ? "That was already recorded." : r.rest ? "Recorded. The rest stays on the slate." : "Settled up." };
+});
+
+/** Sets or (null) clears the day the balance was promised back by. */
+on("PUT", "slate/:id/promise", async (c) => {
+  const personId = id(c, "Person");
+  await setPromise(c.ctx, personId, parseInput(promiseInput, { promisedBy: c.body.promisedBy }).promisedBy);
+  return { data: await getAccount(c.ctx, personId), message: c.body.promisedBy ? "Promise saved." : "Promise removed. The balance stays." };
 });
 
 on("DELETE", "slate/lines/:id", async (c) => {

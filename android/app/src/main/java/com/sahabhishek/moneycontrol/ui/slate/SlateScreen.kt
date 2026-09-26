@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +45,7 @@ import com.sahabhishek.moneycontrol.Nav
 import com.sahabhishek.moneycontrol.data.Messenger
 import com.sahabhishek.moneycontrol.data.api.Account
 import com.sahabhishek.moneycontrol.data.api.AccountDetail
+import com.sahabhishek.moneycontrol.ui.entry.DateField
 import com.sahabhishek.moneycontrol.ui.entry.DateTimeField
 import com.sahabhishek.moneycontrol.ui.ledger.dashedBorder
 import com.sahabhishek.moneycontrol.ui.shell.Page
@@ -82,7 +84,9 @@ import com.sahabhishek.moneycontrol.util.dayMonth
 import com.sahabhishek.moneycontrol.util.dayMonthYear
 import com.sahabhishek.moneycontrol.util.maskRef
 import com.sahabhishek.moneycontrol.util.openWeb
+import com.sahabhishek.moneycontrol.util.parsePaise
 import com.sahabhishek.moneycontrol.util.rupees
+import com.sahabhishek.moneycontrol.util.rupeesExact
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -126,7 +130,7 @@ fun SlateScreen(shell: ShellState, nav: Nav, vm: SlateViewModel, wireVm: WireVie
 
         Column(Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, bottom = 32.dp)) {
           SlatePages(
-            accounts = shown, openId = state.openId, busy = state.busy,
+            accounts = shown, openId = state.openId, busy = state.busy, today = state.today,
             onOpen = { a -> vm.openAccount(a.id); scope.launch { scroll.animateScrollTo(accountTop) } },
             onRemind = vm::remind,
             onPayBack = { a -> vm.openAccount(a.id); scope.launch { scroll.animateScrollTo(recordTop) } },
@@ -330,6 +334,16 @@ private fun OpenAccount(
               Text(rupees(abs(b)), Modifier.alignByBaseline(), style = serif(44.sp), color = c.inkBase)
             }
             if (a.ageDays != null && b != 0L) AgeBadge(a.ageDays)
+            a.promisedBy?.let { day ->
+              PromiseLine(day, today = state.today, prefix = if (b > 0) "Promised back by" else "You said by") {
+                Text(
+                  if (state.busy == "promise-${a.id}") "…" else "CLEAR",
+                  Modifier.clickable(role = Role.Button, enabled = state.busy == null) { vm.clearPromise(a) },
+                  style = mono(9.sp, FontWeight.Medium, 0.1).copy(textDecoration = TextDecoration.Underline),
+                  color = c.inkFaint,
+                )
+              }
+            }
           }
           RuleHair()
         }
@@ -340,12 +354,9 @@ private fun OpenAccount(
               val age = a.ageDays ?: 0
               Btn(if (state.busy == "remind-${a.id}") "…" else if (age > 90) "Chase" else if (age > 60) "Remind" else "Nudge", { vm.remind(a) }, Modifier.weight(1f))
             }
-            if (b != 0L) ConfirmButton(
-              "Settle up",
-              if (b > 0) "${a.name} paid you ₹${rupees(b)} in full?" else "You paid ${a.name} ₹${rupees(-b)} in full?",
-              { vm.settleUp(a) }, Modifier.weight(1f), confirmLabel = "Yes, settled",
-            )
+            if (b != 0L) Btn(if (state.settle.open) "Close" else "Settle up", { vm.toggleSettle(a) }, Modifier.weight(1f))
           }
+          if (b != 0L && state.settle.open) SettleFormView(a, state, vm)
         }
         Column(
           Modifier.padding(horizontal = 18.dp).fillMaxWidth().background(c.spendBright.mix(0.10f)).border(1.dp, c.spend.mix(0.35f)).padding(14.dp),
@@ -364,6 +375,51 @@ private fun OpenAccount(
         Box(Modifier.padding(horizontal = 18.dp)) { PersonEditor(a, state, vm) }
       }
     }
+  }
+}
+
+/** SettleUp — how much came back (the whole balance to start), and when the rest was promised by. */
+@Composable
+private fun SettleFormView(a: Account, state: SlateState, vm: SlateViewModel) {
+  val c = Ledger.colors
+  val f = state.settle
+  val err = state.settleStatus.fieldErrors
+  val first = a.name.split(" ").first()
+  val theyPay = a.balance > 0
+  val owed = abs(a.balance)
+  val paid = parsePaise(f.amount)
+  val rest = if (paid != null && paid > 0 && paid < owed) owed - paid else 0L
+  Column(Modifier.fillMaxWidth().background(c.paperSunk).dashedBorder().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LabeledField(if (theyPay) "$first paid you ₹" else "You paid $first ₹") {
+      Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) {
+          WebInput(f.amount, { v -> vm.editSettle { it.copy(amount = v) } }, monoFace = true, keyboardType = KeyboardType.Decimal, invalid = err["amount"] != null)
+        }
+        Text("of ₹${rupeesExact(owed)}", style = mono(11.sp), color = c.inkFaint)
+      }
+      FieldError(err["amount"])
+    }
+    Hint(
+      when {
+        paid != null && paid > owed -> "That's more than the balance. Record it as a payment instead."
+        rest > 0 -> "₹${rupeesExact(rest)} stays on the slate ${if (theyPay) "for $first to return later." else "for you to return later."}"
+        else -> "That squares the account."
+      },
+    )
+    if (rest > 0) {
+      LabeledField(if (theyPay) "$first will return the rest by" else "You'll return the rest by") {
+        DateField(f.promisedBy, err["promisedBy"] != null, minDay = state.today, placeholder = "Pick a day") { v -> vm.editSettle { it.copy(promisedBy = v) } }
+        Hint("Optional. Leave it empty if no day was given.")
+        FieldError(err["promisedBy"])
+      }
+    }
+    FormError(state.settleStatus.error?.takeIf { err.isEmpty() })
+    Btn(
+      if (state.settleStatus.pending) "Recording…" else if (rest > 0) "Record part payment" else "Settle up",
+      { vm.settleUp(a) },
+      style = BtnStyle.Ink,
+      enabled = !state.settleStatus.pending,
+    )
   }
 }
 

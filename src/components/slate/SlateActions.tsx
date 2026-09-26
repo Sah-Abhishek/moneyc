@@ -2,8 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { addSlateLineAction, archivePersonAction, deletePersonAction, deleteSlateLineAction, remindAction, updatePersonAction } from "@/app/actions/slate";
-import { rupees } from "@/lib/money";
+import {
+  addSlateLineAction, archivePersonAction, clearPromiseAction, deletePersonAction, deleteSlateLineAction, remindAction, settleUpAction, updatePersonAction,
+} from "@/app/actions/slate";
+import { parsePaise, rupees, rupeesExact } from "@/lib/money";
 import { ConfirmButton, FieldError, FormError } from "../ui/Confirm";
 import { useToast } from "../ui/Toaster";
 import { callAction, newKey, useSubmit } from "../ui/useSubmit";
@@ -99,33 +101,122 @@ export function SlateLineForm({ personId, name, now, balance, startDirection }: 
   );
 }
 
-/** Writes the line that brings the balance to zero. */
-export function SettleUpButton({ personId, name, balance, now }: { personId: number; name: string; balance: number; now: string }) {
+/**
+ * Settle up, in full or in part. The amount starts at the whole balance;
+ * paying less keeps the rest on the slate and asks (optionally) by when it
+ * was promised. The row holds the other card buttons, passed in as `children`.
+ */
+export function SettleUp({ personId, name, balance, now, children }: { personId: number; name: string; balance: number; now: string; children?: React.ReactNode }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(newKey);
+  const owed = Math.abs(balance);
+  const [amount, setAmount] = useState(rupeesExact(owed));
+  const first = name.split(" ")[0];
+  const theyPay = balance > 0;
+  const paid = parsePaise(amount);
+  const rest = paid != null && paid > 0 && paid < owed ? owed - paid : 0;
+  const { onSubmit, pending, error, fieldErrors } = useSubmit(settleUpAction, {
+    onSuccess: (r) => {
+      setKey(newKey());
+      setOpen(false);
+      toast({ tone: "info", message: r.message ?? "Recorded." });
+    },
+  });
+  if (balance === 0) return children ? <div className={s.cardActionRow}>{children}</div> : null;
+
+  return (
+    <>
+      <div className={s.cardActionRow}>
+        {children}
+        <button
+          type="button"
+          className="btn btn-line"
+          aria-expanded={open}
+          onClick={() => {
+            // Opening again starts from the balance as it is now.
+            if (!open) setAmount(rupeesExact(owed));
+            setOpen((o) => !o);
+          }}
+        >
+          {open ? "Close" : "Settle up"}
+        </button>
+      </div>
+      {open && (
+        <form onSubmit={onSubmit} className={s.settleForm} noValidate aria-label={`Settle up with ${name}`}>
+          <input type="hidden" name="personId" value={personId} />
+          <input type="hidden" name="clientKey" value={key} />
+          <input type="hidden" name="occurredAt" value={now.slice(0, 16)} />
+          <label className={s.lf}>
+            <span className="eyebrow">{theyPay ? `${first} paid you ₹` : `You paid ${first} ₹`}</span>
+            <span className={s.settleAmount}>
+              <input
+                name="amount"
+                className="input mono"
+                inputMode="decimal"
+                autoComplete="off"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                aria-invalid={!!fieldErrors.amount || undefined}
+                aria-describedby="su-rest"
+                autoFocus
+              />
+              <span className={s.settleOf}>of ₹{rupeesExact(owed)}</span>
+            </span>
+            <FieldError id="su-amount" message={fieldErrors.amount} />
+          </label>
+          <p className="hint" id="su-rest" aria-live="polite">
+            {paid != null && paid > owed
+              ? `That's more than the balance. Record it as a payment instead.`
+              : rest
+                ? `₹${rupeesExact(rest)} stays on the slate${theyPay ? ` for ${first} to return later.` : " for you to return later."}`
+                : "That squares the account."}
+          </p>
+          {rest > 0 && (
+            <label className={s.lf}>
+              <span className="eyebrow">{theyPay ? `${first} will return the rest by` : "You'll return the rest by"}</span>
+              <input
+                name="promisedBy"
+                type="date"
+                className="input mono"
+                min={now.slice(0, 10)}
+                aria-invalid={!!fieldErrors.promisedBy || undefined}
+                aria-describedby="su-promise-hint"
+              />
+              <span className="hint" id="su-promise-hint">
+                Optional. Leave it empty if no day was given.
+              </span>
+              <FieldError id="su-promise" message={fieldErrors.promisedBy} />
+            </label>
+          )}
+          <FormError message={error} />
+          <button type="submit" className="btn btn-ink" disabled={pending} aria-busy={pending}>
+            {pending ? "Recording…" : rest ? "Record part payment" : "Settle up"}
+          </button>
+        </form>
+      )}
+    </>
+  );
+}
+
+/** Takes back a promise to pay the rest; the balance itself stays. */
+export function ClearPromise({ personId }: { personId: number }) {
   const toast = useToast();
   const [pending, start] = useTransition();
-  const [key] = useState(newKey);
-  if (balance === 0) return null;
-  const question = balance > 0 ? `${name} paid you ₹${rupees(balance)} in full?` : `You paid ${name} ₹${rupees(-balance)} in full?`;
   return (
-    <ConfirmButton
-      label="Settle up"
-      question={question}
-      confirmLabel="Yes, settled"
-      pending={pending}
-      onConfirm={() =>
+    <button
+      type="button"
+      className={s.promiseClear}
+      disabled={pending}
+      onClick={() =>
         start(async () => {
-          const f = new FormData();
-          f.set("personId", String(personId));
-          f.set("amount", (Math.abs(balance) / 100).toFixed(2));
-          f.set("direction", balance > 0 ? "got" : "gave");
-          f.set("occurredAt", now.slice(0, 16));
-          f.set("note", "Settled up");
-          f.set("clientKey", key);
-          const r = await callAction(() => addSlateLineAction(f));
-          toast(r.ok ? { tone: "info", message: `Settled with ${name}.` } : { tone: "error", message: r.error });
+          const r = await callAction(() => clearPromiseAction(personId));
+          toast(r.ok ? { tone: "info", message: r.message ?? "Done." } : { tone: "error", message: r.error });
         })
       }
-    />
+    >
+      {pending ? "…" : "Clear"}
+    </button>
   );
 }
 

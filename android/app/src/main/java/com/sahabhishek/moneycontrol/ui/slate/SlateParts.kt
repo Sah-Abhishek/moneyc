@@ -44,6 +44,7 @@ import com.sahabhishek.moneycontrol.ui.web.Rule
 import com.sahabhishek.moneycontrol.ui.web.RuleHair
 import com.sahabhishek.moneycontrol.ui.web.mix
 import com.sahabhishek.moneycontrol.util.dayMonth
+import com.sahabhishek.moneycontrol.util.daysBetween
 import com.sahabhishek.moneycontrol.util.rupees
 import kotlin.math.abs
 
@@ -103,15 +104,15 @@ private fun androidx.compose.foundation.layout.RowScope.PageCol(label: String, a
 /** SlatePages.tsx — "Owed to you" then "You owe", stacked on a phone, then the settled names. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SlatePages(accounts: List<Account>, openId: Long?, busy: String?, onOpen: (Account) -> Unit, onRemind: (Account) -> Unit, onPayBack: (Account) -> Unit) {
+fun SlatePages(accounts: List<Account>, openId: Long?, busy: String?, today: String, onOpen: (Account) -> Unit, onRemind: (Account) -> Unit, onPayBack: (Account) -> Unit) {
   if (accounts.isEmpty()) return
   val owed = accounts.filter { it.balance > 0 }.sortedByDescending { it.ageDays ?: 0 }
   val owe = accounts.filter { it.balance < 0 }.sortedByDescending { it.ageDays ?: 0 }
   val settled = accounts.filter { it.balance == 0L }
   Column(Modifier.fillMaxWidth()) {
     Rule()
-    SlatePage("Owed to you", "They borrowed from you", owed, openId, owed = true, busy, onOpen, onRemind, onPayBack)
-    SlatePage("You owe", "You borrowed from them", owe, openId, owed = false, busy, onOpen, onRemind, onPayBack)
+    SlatePage("Owed to you", "They borrowed from you", owed, openId, owed = true, busy, today, onOpen, onRemind, onPayBack)
+    SlatePage("You owe", "You borrowed from them", owe, openId, owed = false, busy, today, onOpen, onRemind, onPayBack)
     if (settled.isNotEmpty()) {
       RuleHair()
       FlowRow(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), itemVerticalAlignment = Alignment.Bottom) {
@@ -129,7 +130,7 @@ fun SlatePages(accounts: List<Account>, openId: Long?, busy: String?, onOpen: (A
 
 @Composable
 private fun SlatePage(
-  title: String, dek: String, rows: List<Account>, openId: Long?, owed: Boolean, busy: String?,
+  title: String, dek: String, rows: List<Account>, openId: Long?, owed: Boolean, busy: String?, today: String,
   onOpen: (Account) -> Unit, onRemind: (Account) -> Unit, onPayBack: (Account) -> Unit,
 ) {
   val c = Ledger.colors
@@ -178,6 +179,7 @@ private fun SlatePage(
                 style = mono(9.5.sp),
                 color = c.inkFaint,
               )
+              a.promisedBy?.let { PromiseLine(it, today, prefix = "Promised by", Modifier.padding(top = 3.dp)) }
             }
             Text(rupees(a.balance), Modifier.width(86.dp), style = mono(15.sp, FontWeight.Medium), color = c.inkBase, textAlign = TextAlign.End)
             val label = if (owed) (if (busy == "remind-${a.id}") "…" else if (age > 90) "Chase" else if (age > 60) "Remind" else "Nudge") else "Pay back"
@@ -219,5 +221,21 @@ fun AgeBadge(days: Int) {
   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
     Box(Modifier.size(6.dp).background(tone, CircleShape))
     Text("$days DAY${if (days == 1) "" else "S"}", style = mono(9.sp, FontWeight.Medium, 0.1), color = tone)
+  }
+}
+
+/** "PROMISED BACK BY 05 OCT", ochre with how late once the day has passed; `trailing` sits after it (Clear). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun PromiseLine(day: String, today: String, prefix: String, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
+  val c = Ledger.colors
+  val late = if (today.isNotEmpty() && day < today) daysBetween(day, today) else 0L
+  FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+    Text(
+      "$prefix ${dayMonth(day)}".uppercase() + if (late > 0) " · $late DAY${if (late == 1L) "" else "S"} LATE" else "",
+      style = mono(9.sp, FontWeight.Medium, 0.1),
+      color = if (late > 0) c.spend else c.inkMuted,
+    )
+    trailing?.invoke()
   }
 }

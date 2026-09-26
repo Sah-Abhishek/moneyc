@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { freshCtx, insertMail, key, secondUser, tagId } from "../test-helpers.ts";
-import { parseInput, entryInput, quickEntryInput, ruleInput, tagGroupInput } from "../validation.ts";
+import { parseInput, entryInput, quickEntryInput, ruleInput, settleInput, tagGroupInput } from "../validation.ts";
 import { ConflictError, NotFoundError, UserError } from "./context.ts";
 import { addEntry, addQuickEntry, deleteEntry, findLikelyDuplicate, getEntry, listEntries, restoreEntry, updateEntry } from "./entries.ts";
 import { createRule, deleteRule, listRules, moveRule } from "./rules.ts";
-import { addSlateLine, createPerson, getAccount, listAccounts, matchPerson, slateStats, deletePerson } from "./slate.ts";
+import { addSlateLine, createPerson, getAccount, listAccounts, matchPerson, remind, setPromise, settleUp, slateStats, deletePerson } from "./slate.ts";
 import { groupReports, monthSummary, monthlySpend, merchants } from "./summary.ts";
 import { createGroup, deleteGroup, listGroups, updateGroup } from "./tagGroups.ts";
 import { createTag, deleteTag, listTags, mergeTags } from "./tags.ts";
@@ -358,6 +358,44 @@ test("slate lines are idempotent and people match by alternate names", async () 
   assert.equal((await matchPerson(ctx, "priya@okicici"))?.id, p);
   assert.equal(await matchPerson(ctx, "Priyanka"), null);
   await assert.rejects(createPerson(ctx, { name: "priya nair", matchNames: null, phone: null, note: null }), UserError);
+});
+
+test("settling in part leaves the rest open with its promise; paying the rest clears it", async () => {
+  const ctx = await freshCtx();
+  const aditya = await createPerson(ctx, { name: "Aditya", matchNames: null, phone: null, note: null });
+  await addSlateLine(ctx, { personId: aditya, amount: 200000, direction: "gave", occurredAt: "2026-09-20T10:00:00", note: "Lent", clientKey: key() });
+
+  const settle = (over: Record<string, unknown>) =>
+    settleUp(ctx, parseInput(settleInput, { personId: aditya, amount: "", promisedBy: "", occurredAt: "2026-09-26T18:00", clientKey: key(), ...over }));
+
+  await assert.rejects(settle({ amount: "2500" }), (e: UserError) => !!e.fieldErrors?.amount);
+  await assert.rejects(settle({ amount: "1800", promisedBy: "2026-09-25" }), (e: UserError) => !!e.fieldErrors?.promisedBy);
+  assert.throws(() => parseInput(settleInput, { personId: aditya, amount: "", promisedBy: "2026-02-30", occurredAt: "2026-09-26T18:00", clientKey: key() }), UserError);
+
+  const k = key();
+  const part = await settle({ amount: "1800", promisedBy: "2026-10-05", clientKey: k });
+  assert.equal(part.rest, 20000);
+  assert.equal((await settle({ amount: "1800", promisedBy: "2026-10-05", clientKey: k })).duplicate, true);
+  const after = await getAccount(ctx, aditya);
+  assert.equal(after.account.balance, 20000);
+  assert.equal(after.account.promisedBy, "2026-10-05");
+  assert.equal(after.lines.at(-1)!.note, "Paid ₹1,800 of ₹2,000 · ₹200 later");
+  assert.match((await remind(ctx, aditya)).text, /by 5 Oct/);
+
+  // No amount settles whatever is left, and the promise goes with it.
+  await settle({});
+  const square = (await getAccount(ctx, aditya)).account;
+  assert.equal(square.balance, 0);
+  assert.equal(square.promisedBy, null);
+  await assert.rejects(settle({}), ConflictError);
+
+  // Lending again doesn't bring the old promise back.
+  await addSlateLine(ctx, { personId: aditya, amount: 50000, direction: "gave", occurredAt: "2026-09-27T10:00:00", note: "Lent", clientKey: key() });
+  assert.equal((await getAccount(ctx, aditya)).account.promisedBy, null);
+  await setPromise(ctx, aditya, "2026-10-10");
+  assert.equal((await getAccount(ctx, aditya)).account.promisedBy, "2026-10-10");
+  await setPromise(ctx, aditya, null);
+  assert.equal((await getAccount(ctx, aditya)).account.promisedBy, null);
 });
 
 // ─── cash and cheques ────────────────────────────────────────────────────

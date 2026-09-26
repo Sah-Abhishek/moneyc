@@ -180,6 +180,27 @@ export const slateLineInput = z.object({
   clientKey: z.string().min(8).max(64),
 });
 
+/** a calendar day, "2026-10-05"; empty means none */
+const optionalDay = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid day")
+    .refine((s) => isWallClock(`${s}T00:00:00`), "Choose a valid day")
+    .nullable(),
+);
+
+/** Settle up: no amount = the whole balance; less leaves the rest, maybe promised by a day. */
+export const settleInput = z.object({
+  personId: idField("Person"),
+  amount: z.preprocess((v) => (v === "" || v == null ? null : v), amountField.nullable()),
+  promisedBy: optionalDay,
+  occurredAt: wallClockField,
+  clientKey: z.string().min(8).max(64),
+});
+
+export const promiseInput = z.object({ promisedBy: optionalDay });
+
 export const settingsInput = z.object({
   monthlyBudget: z
     .string()

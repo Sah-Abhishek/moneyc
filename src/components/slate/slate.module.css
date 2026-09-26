@@ -571,6 +571,55 @@
   gap: 8px;
 }
 .cardActionRow > * { flex: 1; }
+
+/* Settle up: how much came back, and when the rest was promised. */
+.settleForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px dashed var(--ink-base);
+  background: var(--paper-sunk);
+}
+.settleForm .lf { min-width: 0; }
+.settleAmount {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.settleAmount :global(.input) { flex: 1; min-width: 0; }
+.settleOf {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* "Promised back by 05 OCT", ochre once the day has passed. */
+.promise {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.promise[data-late] { color: var(--signal-spend); }
+.promiseClear {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.promiseClear:disabled { cursor: progress; }
 .linked {
   display: flex;
   flex-direction: column;
@@ -639,4 +688,10 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: color-mix(in srgb, var(--paper-base) 55%, transparent);
+}
+
+/* In the page lists the promise sits on its own line under the meta. */
+.whoMeta + .promise {
+  display: flex;
+  margin-top: 3px;
 }

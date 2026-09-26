@@ -10,6 +10,7 @@ import com.sahabhishek.moneycontrol.data.api.AccountDetail
 import com.sahabhishek.moneycontrol.data.api.ApiResult
 import com.sahabhishek.moneycontrol.data.api.Reminder
 import com.sahabhishek.moneycontrol.data.api.SlateData
+import com.sahabhishek.moneycontrol.util.rupeesExact
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,9 @@ data class NewAccountForm(
 /** A line on the open account. */
 data class LineForm(val direction: String = "gave", val amount: String = "", val note: String = "", val occurredAt: String = "")
 
+/** Settle up, in full or in part: what came back, and the day the rest was promised by ("" = none). */
+data class SettleForm(val open: Boolean = false, val amount: String = "", val promisedBy: String = "")
+
 data class PersonForm(val open: Boolean = false, val name: String = "", val matchNames: String = "", val phone: String = "", val note: String = "")
 
 data class SlateState(
@@ -47,9 +51,13 @@ data class SlateState(
   val newStatus: Status = Status(),
   val line: LineForm = LineForm(),
   val lineStatus: Status = Status(),
+  val settle: SettleForm = SettleForm(),
+  val settleStatus: Status = Status(),
   val person: PersonForm = PersonForm(),
   val personStatus: Status = Status(),
   val busy: String? = null,
+  /** the user's calendar day, "YYYY-MM-DD": promises before it are late */
+  val today: String = "",
 )
 
 /** app/(book)/slate/page.tsx and the components in components/slate. */
@@ -77,6 +85,7 @@ class SlateViewModel(private val slate: SlateRepository, private val messages: M
   /** `personId`: the account asked for (?person=); `now`: the user's wall clock, for new lines. */
   fun show(personId: Long?, now: String) {
     this.now = now
+    if (_state.value.today != now.take(10)) _state.update { it.copy(today = now.take(10)) }
     if (requested == personId && _state.value.data != null) return
     requested = personId
     _state.update {
@@ -123,7 +132,7 @@ class SlateViewModel(private val slate: SlateRepository, private val messages: M
 
   fun openAccount(id: Long) {
     requested = id
-    _state.update { it.copy(openId = id) }
+    _state.update { it.copy(openId = id, settle = SettleForm(), settleStatus = Status()) }
     viewModelScope.launch { loadAccount(id) }
   }
 
@@ -171,15 +180,45 @@ class SlateViewModel(private val slate: SlateRepository, private val messages: M
     }
   }
 
-  /** Writes the line that brings the balance to zero. */
+  /** Opens Settle up with the whole balance filled in; again closes it. */
+  fun toggleSettle(a: Account) = _state.update {
+    it.copy(
+      settle = if (it.settle.open) SettleForm() else SettleForm(open = true, amount = rupeesExact(kotlin.math.abs(a.balance))),
+      settleStatus = Status(),
+    )
+  }
+
+  fun editSettle(f: (SettleForm) -> SettleForm) = _state.update { it.copy(settle = f(it.settle)) }
+
+  /** Settles in full, or in part leaving the rest on the slate (maybe promised by a day). */
   fun settleUp(a: Account) {
+    val f = _state.value.settle
+    if (_state.value.settleStatus.pending) return
+    _state.update { it.copy(settleStatus = Status(pending = true)) }
     viewModelScope.launch {
-      val amount = "%.2f".format(kotlin.math.abs(a.balance) / 100.0)
-      when (val r = slate.addLine(a.id, amount, if (a.balance > 0) "got" else "gave", now.take(16), "Settled up", settleKey)) {
-        is ApiResult.Failure -> messages.error(r.error)
+      when (val r = slate.settle(a.id, f.amount, f.promisedBy.ifEmpty { null }, now.take(16), settleKey)) {
+        is ApiResult.Failure -> _state.update { it.copy(settleStatus = Status(error = r.error, fieldErrors = r.fieldErrors)) }
         is ApiResult.Ok -> {
           settleKey = UUID.randomUUID().toString()
-          messages.say("Settled with ${a.name}.")
+          _state.update { it.copy(settle = SettleForm(), settleStatus = Status(), detail = r.data) }
+          messages.say(r.message ?: "Recorded.")
+        }
+      }
+    }
+  }
+
+  /** Takes back a promise to pay the rest; the balance itself stays. */
+  fun clearPromise(a: Account) {
+    if (_state.value.busy != null) return
+    _state.update { it.copy(busy = "promise-${a.id}") }
+    viewModelScope.launch {
+      val r = slate.clearPromise(a.id)
+      _state.update { it.copy(busy = null) }
+      when (r) {
+        is ApiResult.Failure -> messages.error(r.error)
+        is ApiResult.Ok -> {
+          _state.update { it.copy(detail = r.data) }
+          messages.say(r.message ?: "Promise removed.")
         }
       }
     }

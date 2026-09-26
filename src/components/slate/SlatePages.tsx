@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { dayMonth } from "@/lib/dates";
+import { dayMonth, daysBetween } from "@/lib/dates";
 import { rupees } from "@/lib/money";
 import type { Account } from "@/server/services/slate";
 import { RemindButton } from "./SlateActions";
 import s from "./slate.module.css";
 
 // The double-entry book: owed to you on the left page, you owe on the right.
-export function SlatePages({ accounts, openId }: { accounts: Account[]; now: string; openId: number | null }) {
+export function SlatePages({ accounts, now, openId }: { accounts: Account[]; now: string; openId: number | null }) {
   const owed = accounts.filter((a) => a.balance > 0).sort((a, b) => (b.ageDays ?? 0) - (a.ageDays ?? 0));
   const owe = accounts.filter((a) => a.balance < 0).sort((a, b) => (b.ageDays ?? 0) - (a.ageDays ?? 0));
   const settled = accounts.filter((a) => a.balance === 0);
@@ -14,9 +14,9 @@ export function SlatePages({ accounts, openId }: { accounts: Account[]; now: str
 
   return (
     <div className={s.book}>
-      <Page title="Owed to you" dek="They borrowed from you" rows={owed} openId={openId} side="owed" />
+      <Page title="Owed to you" dek="They borrowed from you" rows={owed} openId={openId} side="owed" today={now.slice(0, 10)} />
       <div className={s.gutter} aria-hidden />
-      <Page title="You owe" dek="You borrowed from them" rows={owe} openId={openId} side="owe" />
+      <Page title="You owe" dek="You borrowed from them" rows={owe} openId={openId} side="owe" today={now.slice(0, 10)} />
       {settled.length > 0 && (
         <div className={s.settled}>
           <span className="eyebrow">Settled</span>
@@ -34,7 +34,7 @@ export function SlatePages({ accounts, openId }: { accounts: Account[]; now: str
   );
 }
 
-function Page({ title, dek, rows, openId, side }: { title: string; dek: string; rows: Account[]; openId: number | null; side: "owed" | "owe" }) {
+function Page({ title, dek, rows, openId, side, today }: { title: string; dek: string; rows: Account[]; openId: number | null; side: "owed" | "owe"; today: string }) {
   const total = rows.reduce((t, a) => t + Math.abs(a.balance), 0);
   return (
     <section className={s.page} aria-label={title}>
@@ -78,6 +78,13 @@ function Page({ title, dek, rows, openId, side }: { title: string; dek: string; 
                       {a.lineCount} {a.lineCount === 1 ? "entry" : "entries"}
                       {a.openSince && ` · since ${dayMonth(a.openSince)}`}
                     </span>
+                    {a.promisedBy && (
+                      <span className={s.promise} data-late={a.promisedBy < today || undefined}>
+                        {a.promisedBy < today
+                          ? `Promised by ${dayMonth(a.promisedBy)} · ${daysBetween(a.promisedBy, today)} days late`
+                          : `Promised by ${dayMonth(a.promisedBy)}`}
+                      </span>
+                    )}
                   </td>
                   <td>
                     <span className={s.age} data-color={tone}>

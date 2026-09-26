@@ -29,6 +29,14 @@ fun rupeesExact(paise: Long): String {
   return "${groupIndian(a / 100)}.${(a % 100).toString().padStart(2, '0')}"
 }
 
+/** "1,899.00" / "1899" / "Rs. 1,899.00" → 189900; null when unparseable. Like the web's parsePaise(). */
+fun parsePaise(input: String): Long? {
+  val cleaned = input.replace(Regex("(rs\\.?|inr|₹)", RegexOption.IGNORE_CASE), "").replace(Regex("[,\\s]"), "")
+  if (!Regex("^\\d+(\\.\\d{1,2})?$").matches(cleaned)) return null
+  val parts = cleaned.split(".")
+  return parts[0].toLongOrNull()?.let { it * 100 + (parts.getOrNull(1) ?: "").padEnd(2, '0').toLong() }
+}
+
 /** "−486.00" / "+2,500.00" */
 fun signedAmount(paise: Long): String = "${if (paise < 0) "−" else "+"}${rupeesExact(paise)}"
 

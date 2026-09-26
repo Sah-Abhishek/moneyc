@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { act } from "@/server/app";
 import {
-  addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, openAccount, remind, setArchived, unlinkEntry, updatePerson,
+  addSlateLine, deletePerson, deleteSlateLine, getAccount, linkEntryToPerson, openAccount, remind, setArchived, setPromise, settleUp, unlinkEntry, updatePerson,
 } from "@/server/services/slate";
-import { idField, parseInput, personInput, slateLineInput } from "@/server/validation";
+import { idField, parseInput, personInput, settleInput, slateLineInput } from "@/server/validation";
 
 const refresh = () => revalidatePath("/", "layout");
 const personFields = (form: FormData) => ({
@@ -46,6 +46,27 @@ export async function addSlateLineAction(form: FormData) {
     }));
     refresh();
     return { ok: true, message: r.duplicate ? "That line was already recorded." : "Recorded on the slate." };
+  });
+}
+
+export async function settleUpAction(form: FormData) {
+  return act("slate.settle", async ({ ctx }) => {
+    const input = parseInput(settleInput, {
+      personId: form.get("personId"), amount: form.get("amount"), promisedBy: form.get("promisedBy"),
+      occurredAt: form.get("occurredAt"), clientKey: form.get("clientKey"),
+    });
+    const { account } = await getAccount(ctx, input.personId);
+    const r = await settleUp(ctx, input);
+    refresh();
+    return { ok: true, message: r.duplicate ? "That was already recorded." : r.rest ? `Recorded. ${account.name} still has some to return.` : `Settled with ${account.name}.` };
+  });
+}
+
+export async function clearPromiseAction(personId: number) {
+  return act("slate.promise_clear", async ({ ctx }) => {
+    await setPromise(ctx, parseInput(idField("Person"), personId), null);
+    refresh();
+    return { ok: true, message: "Promise removed. The balance stays." };
   });
 }
 

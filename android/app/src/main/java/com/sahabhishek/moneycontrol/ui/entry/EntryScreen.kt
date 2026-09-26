@@ -24,6 +24,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
@@ -337,6 +338,47 @@ fun DateTimeField(value: String, invalid: Boolean, onChange: (String) -> Unit) {
     )
   }
 }
+
+/** <input type="date">, optional: shows "10/05/2026" or the placeholder; tapping opens the calendar, from `minDay` on. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateField(value: String, invalid: Boolean, minDay: String, placeholder: String, onChange: (String) -> Unit) {
+  val c = Ledger.colors
+  val current = runCatching { LocalDate.parse(value) }.getOrNull()
+  val min = runCatching { LocalDate.parse(minDay) }.getOrNull()
+  var picking by rememberSaveable { mutableStateOf(false) }
+  Row(
+    Modifier.fillMaxWidth().heightIn(min = 36.dp).background(c.paperRaised).border(1.dp, if (invalid) c.spend else c.ruleHair)
+      .clickable(role = Role.Button) { picking = true }.padding(horizontal = 10.dp, vertical = 7.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Text(current?.format(DAY_SHOWN) ?: placeholder, Modifier.weight(1f), style = mono(13.sp), color = if (current != null) c.inkBase else c.inkFaint)
+    if (current != null) Text("CLEAR", Modifier.clickable(role = Role.Button) { onChange("") }.padding(end = 10.dp), style = mono(9.sp, FontWeight.Medium, 0.12), color = c.inkFaint)
+    Image(painterResource(R.drawable.ic_calendar), null, Modifier.size(14.dp))
+  }
+  if (picking) {
+    val start = (current ?: min ?: LocalDate.now()).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+    val floor = min?.atStartOfDay()?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
+    val date = rememberDatePickerState(
+      initialSelectedDateMillis = start,
+      selectableDates = object : SelectableDates {
+        override fun isSelectableDate(utcTimeMillis: Long) = floor == null || utcTimeMillis >= floor
+      },
+    )
+    DatePickerDialog(
+      onDismissRequest = { picking = false },
+      confirmButton = {
+        TextButton({
+          date.selectedDateMillis?.let { onChange(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()) }
+          picking = false
+        }) { Text("SET", style = mono(10.sp, FontWeight.SemiBold, 0.12), color = c.inkBase) }
+      },
+      dismissButton = { TextButton({ picking = false }) { Text("CANCEL", style = mono(10.sp, FontWeight.Medium, 0.12), color = c.inkMuted) } },
+    ) { DatePicker(date) }
+  }
+}
+
+private val DAY_SHOWN = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.US)
 
 /** SlateLinker.tsx — moves a ledger line onto someone's slate. */
 @OptIn(ExperimentalLayoutApi::class)

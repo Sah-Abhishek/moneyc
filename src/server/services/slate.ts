@@ -1,5 +1,5 @@
 import { daysBetween, wallClock } from "../../lib/dates.ts";
-import { rupees } from "../../lib/money.ts";
+import { rupees, rupeesExact } from "../../lib/money.ts";
 import { all, insertId, one, run, withTx } from "../db/index.ts";
 import { ConflictError, NotFoundError, nowUtc, UserError, type Ctx } from "./context.ts";
 
@@ -17,6 +17,8 @@ export interface Person {
   remindersSent: number;
   lastRemindedAt: string | null;
   archived: boolean;
+  /** the day (YYYY-MM-DD) the open balance was promised back by; null when none was given or the account is square */
+  promisedBy: string | null;
 }
 
 export interface Account extends Person {
@@ -41,13 +43,13 @@ export interface SlateLine {
 
 interface PersonRow {
   id: number; name: string; match_names: string; phone: string | null; note: string | null;
-  reminders_sent: number; last_reminded_at: string | null; archived_at: string | null;
+  reminders_sent: number; last_reminded_at: string | null; archived_at: string | null; promised_by: string | null;
 }
 
 const toPerson = (r: PersonRow): Person => ({
   id: r.id, name: r.name, matchNames: r.match_names.split("\n").map((s) => s.trim()).filter(Boolean),
   phone: r.phone, note: r.note, remindersSent: r.reminders_sent, lastRemindedAt: r.last_reminded_at,
-  archived: r.archived_at != null,
+  archived: r.archived_at != null, promisedBy: r.promised_by,
 });
 
 interface LineRow { id: number; person_id: number; occurred_at: string; amount: number; note: string; entry_id: number | null; source: string | null; ref: string | null }
@@ -91,9 +93,12 @@ export async function listAccounts(ctx: Ctx, opts: { includeArchived?: boolean; 
     .map((p) => {
       const lines = byPerson.get(p.id) ?? [];
       const since = openSince(lines);
+      const balance = lines.reduce((s, l) => s + l.amount, 0);
       return {
         ...p,
-        balance: lines.reduce((s, l) => s + l.amount, 0),
+        // A promise is about an open balance; once square it means nothing.
+        promisedBy: balance === 0 ? null : p.promisedBy,
+        balance,
         lineCount: lines.length,
         openSince: since,
         ageDays: since ? daysBetween(since, today) : null,
@@ -181,7 +186,64 @@ export function addSlateLine(
     const id = await insertId(ctx.db, "INSERT INTO slate_lines (user_id, person_id, occurred_at, amount, note, client_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [
       ctx.userId, input.personId, input.occurredAt, input.direction === "gave" ? input.amount : -input.amount, input.note, input.clientKey, nowUtc(),
     ]);
+    await dropPromiseIfSquare(ctx, input.personId);
     return { id, duplicate: false };
+  });
+}
+
+/** A promise to pay back is kept only while there is something left to pay. */
+async function dropPromiseIfSquare(ctx: Ctx, personId: number) {
+  await run(
+    ctx.db,
+    `UPDATE people SET promised_by = NULL WHERE id = ? AND user_id = ? AND promised_by IS NOT NULL
+       AND (SELECT COALESCE(SUM(amount), 0) FROM slate_lines WHERE person_id = ? AND user_id = ? AND deleted_at IS NULL) = 0`,
+    [personId, ctx.userId, personId, ctx.userId],
+  );
+}
+
+/**
+ * "Settle up", in full or in part. Without an amount the whole balance is
+ * paid. Paying less leaves the rest on the slate, optionally with the day it
+ * was promised by ("Paid ₹1,800 of ₹2,000 · ₹200 later"). Idempotent on clientKey.
+ */
+export function settleUp(
+  ctx: Ctx,
+  input: { personId: number; amount: number | null; promisedBy: string | null; occurredAt: string; clientKey: string },
+): Promise<{ id: number; duplicate: boolean; rest: number }> {
+  return withTx(ctx, async (ctx) => {
+    const existing = await one<{ id: number }>(ctx.db, "SELECT id FROM slate_lines WHERE user_id = ? AND client_key = ?", [ctx.userId, input.clientKey]);
+    if (existing) return { id: existing.id, duplicate: true, rest: 0 };
+    // Serialise settling one account, so two tabs can't both pay the same balance.
+    await one(ctx.db, "SELECT id FROM people WHERE id = ? AND user_id = ? FOR UPDATE", [input.personId, ctx.userId]);
+    const { account } = await getAccount(ctx, input.personId);
+    const owed = Math.abs(account.balance);
+    const inr = (p: number) => (p % 100 ? rupeesExact(p) : rupees(p));
+    if (owed === 0) throw new ConflictError(`You're already square with ${account.name}.`);
+    const paid = input.amount ?? owed;
+    if (paid > owed)
+      throw new UserError(`That's more than the ₹${inr(owed)} on the slate. Record it as a payment instead.`, { amount: `At most ₹${inr(owed)}` });
+    const rest = owed - paid;
+    if (rest > 0 && input.promisedBy && input.promisedBy < input.occurredAt.slice(0, 10))
+      throw new UserError("The rest can't be promised for a day before this payment.", { promisedBy: "Pick this day or later" });
+    const theyPaid = account.balance > 0;
+    const note = rest === 0
+      ? "Settled up"
+      : `${theyPaid ? "Paid" : "You paid"} ₹${inr(paid)} of ₹${inr(owed)} · ₹${inr(rest)} later`;
+    const r = await addSlateLine(ctx, {
+      personId: input.personId, amount: paid, direction: theyPaid ? "got" : "gave", occurredAt: input.occurredAt, note, clientKey: input.clientKey,
+    });
+    // What was said just now replaces any earlier promise; no day given means "later".
+    if (rest > 0) await setPromise(ctx, input.personId, input.promisedBy);
+    return { ...r, rest };
+  });
+}
+
+/** Sets or clears (null) the day the open balance was promised back by. */
+export async function setPromise(ctx: Ctx, personId: number, promisedBy: string | null) {
+  await withTx(ctx, async (ctx) => {
+    await assertPerson(ctx, personId);
+    await run(ctx.db, "UPDATE people SET promised_by = ? WHERE id = ? AND user_id = ?", [promisedBy, personId, ctx.userId]);
+    await dropPromiseIfSquare(ctx, personId);
   });
 }
 
@@ -215,6 +277,7 @@ export async function linkEntryToPerson(ctx: Ctx, entryId: number, personId: num
     await run(ctx.db, "INSERT INTO slate_lines (user_id, person_id, occurred_at, amount, note, entry_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", [
       ctx.userId, personId, e.occurred_at, -e.amount, note, entryId, nowUtc(),
     ]);
+    await dropPromiseIfSquare(ctx, personId);
   });
 }
 
@@ -249,8 +312,15 @@ export async function matchPerson(ctx: Ctx, payee: string | null, accounts?: Acc
 export async function recordReminder(ctx: Ctx, personId: number, amountText: string): Promise<{ text: string; phone: string | null }> {
   const p = await assertPerson(ctx, personId);
   await run(ctx.db, "UPDATE people SET reminders_sent = reminders_sent + 1, last_reminded_at = ? WHERE id = ? AND user_id = ?", [nowUtc(), personId, ctx.userId]);
-  return { text: `Hi ${p.name.split(" ")[0]}, a gentle reminder about the ₹${amountText} from our slate. No rush — whenever you can.`, phone: p.phone };
+  const first = p.name.split(" ")[0];
+  const text = p.promisedBy
+    ? `Hi ${first}, a gentle reminder about the ₹${amountText} from our slate. You'd said you'd return it by ${promiseDay(p.promisedBy)}.`
+    : `Hi ${first}, a gentle reminder about the ₹${amountText} from our slate. No rush — whenever you can.`;
+  return { text, phone: p.phone };
 }
+
+/** "2026-10-05" → "5 Oct", the way people write it in a message. */
+const promiseDay = (d: string) => `${Number(d.slice(8, 10))} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(d.slice(5, 7)) - 1]}`;
 
 /** A reminder for what someone owes you, recorded as sent. Refused when they owe nothing. */
 export async function remind(ctx: Ctx, personId: number): Promise<{ text: string; phone: string | null }> {
