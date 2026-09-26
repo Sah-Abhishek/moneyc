@@ -5,7 +5,7 @@ import { useState } from "react";
 import { deleteSlipAction, fileSlipAction, ignoreSlipAction, markDuplicateAction, restoreSlipAction, unfileSlipAction, unmarkDuplicateAction } from "@/app/actions/wire";
 import { dayMonth, posted } from "@/lib/dates";
 import { rupees, rupeesExact } from "@/lib/money";
-import type { Tag } from "@/lib/types";
+import { lineTitle, type Tag } from "@/lib/types";
 import { maskRef } from "@/lib/wire/parse";
 import type { WireSlip as Slip } from "@/server/services/wire";
 import { useToast } from "./ui/Toaster";
@@ -84,7 +84,7 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
       {showDuplicate && (
         <div className={s.notice} role="note">
           <p>
-            <strong>Looks like a line you already have:</strong> {slip.duplicateOf!.payee}, ₹{rupeesExact(Math.abs(slip.duplicateOf!.amount))} on{" "}
+            <strong>Looks like a line you already have:</strong> {lineTitle(slip.duplicateOf!)}, ₹{rupeesExact(Math.abs(slip.duplicateOf!.amount))} on{" "}
             {dayMonth(slip.duplicateOf!.occurredAt)}.
           </p>
           <div className={s.noticeActions}>
@@ -109,7 +109,7 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
           <Field label="Payee">
             {editing ? (
               <>
-                <input name="payee" defaultValue={p.payee ?? ""} className={s.edit} maxLength={120} aria-invalid={!!fieldErrors.payee || undefined} aria-label="Payee" />
+                <input name="payee" defaultValue={p.payee ?? ""} className={s.edit} maxLength={120} placeholder="Optional if you say what for" aria-invalid={!!fieldErrors.payee || undefined} aria-label="Payee" />
                 <FieldError id={`payee-${slip.id}`} message={fieldErrors.payee} />
               </>
             ) : (

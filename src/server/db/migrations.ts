@@ -221,4 +221,9 @@ export const MIGRATIONS: string[] = [
   -- account is square.
   ALTER TABLE people ADD COLUMN promised_by TEXT;
   `,
+  /* 8 — who was paid is optional */ `
+  -- "Biscuits, ₹15" is enough: a line needs who was paid or what it was for,
+  -- not both. The app checks that at least one is there.
+  ALTER TABLE entries ALTER COLUMN payee DROP NOT NULL;
+  `,
 ];

@@ -235,6 +235,26 @@ test("what the money was for is kept apart from the payee and the note, and is s
   assert.throws(() => line({ item: "x".repeat(121) }), UserError);
 });
 
+test("who was paid is optional when what it was for is given, but one of the two is needed", async () => {
+  const ctx = await freshCtx();
+  const biscuits = await addQuickEntry(ctx, parseInput(quickEntryInput, { payee: "", item: "Biscuits", amount: "15", tagId: "", clientKey: key() }));
+  assert.equal(biscuits.entry.payee, null);
+  assert.equal(biscuits.entry.item, "Biscuits");
+  assert.throws(() => parseInput(quickEntryInput, { payee: " ", item: "", amount: "15", tagId: "", clientKey: key() }), (e: UserError) => !!e.fieldErrors?.payee);
+  assert.throws(() => line({ payee: "", item: "" }), (e: UserError) => !!e.fieldErrors?.payee);
+  const milk = await addEntry(ctx, line({ payee: "", item: "Milk" }), key());
+  assert.equal(milk.entry.payee, null);
+  // Merchants only rank named payees.
+  assert.ok((await merchants(ctx, "2026-09")).every((m) => m.payee));
+
+  // On the wire, clearing the payee is allowed only with a what for.
+  const mail = await insertMail(ctx, HDFC);
+  await assert.rejects(fileMail(ctx, mail, { tagId: null, payee: "" }), (e: UserError) => !!e.fieldErrors?.payee);
+  const filed = await fileMail(ctx, mail, { tagId: null, payee: "", item: "Chai" });
+  assert.equal(filed.payee, null);
+  assert.equal(filed.item, "Chai");
+});
+
 test("archive and restore move a mail off and back onto the desk", async () => {
   const ctx = await freshCtx();
   const mail = await insertMail(ctx, HDFC);

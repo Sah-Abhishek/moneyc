@@ -8,7 +8,7 @@ import { assertTag, tagMap } from "./tags.ts";
 export const PAGE_SIZE = 20;
 
 interface EntryRow {
-  id: number; occurred_at: string; payee: string; amount: number; channel: string;
+  id: number; occurred_at: string; payee: string | null; amount: number; channel: string;
   ref: string | null; account: string | null; item: string | null; note: string | null; tag_id: number | null;
   source: "hand" | "wire"; auto: boolean; person_id: number | null; person_name: string | null;
   to_wallet: boolean; version: number; balance: number;
@@ -82,7 +82,7 @@ export async function hasAnyEntries(ctx: Ctx): Promise<boolean> {
 /** The blank first line of the ledger: payee + amount (+ optional what for, tag and way paid, Cash by default), dated now. */
 export function addQuickEntry(
   ctx: Ctx,
-  input: { payee: string; item?: string | null; amount: { incoming: boolean; raw: number }; tagId: number | null; channel?: EntryInput["channel"]; clientKey: string },
+  input: { payee: string | null; item?: string | null; amount: { incoming: boolean; raw: number }; tagId: number | null; channel?: EntryInput["channel"]; clientKey: string },
 ): Promise<{ entry: Entry; duplicate: boolean }> {
   return addEntry(
     ctx,

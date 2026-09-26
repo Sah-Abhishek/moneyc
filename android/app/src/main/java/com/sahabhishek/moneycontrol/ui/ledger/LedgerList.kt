@@ -197,7 +197,7 @@ private fun GroupPicker(groups: List<TagGroup>, current: Long?, onPick: (TagGrou
 }
 
 /**
- * QuickEntry.tsx at the phone layout, three rows: "+ Who did you pay?  ₹ 0.00",
+ * QuickEntry.tsx at the phone layout, three rows: "+ Who did you pay? (optional)  ₹ 0.00",
  * "What for?", then paid-by, tag and ADD LINE (ADDING… while it saves). Enter adds too.
  */
 @Composable
@@ -233,7 +233,7 @@ private fun QuickEntry(quick: QuickLine, tags: List<Tag>, onChange: (QuickLine) 
           interactionSource = source,
           keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
           keyboardActions = KeyboardActions(onNext = { itemFocus.requestFocus() }),
-          decorationBox = { inner -> Box { if (quick.payee.isEmpty()) Text("Who did you pay?", style = sans(14.sp), color = c.inkMuted); inner() } },
+          decorationBox = { inner -> Box { if (quick.payee.isEmpty()) Text("Who did you pay? (optional)", style = sans(14.sp), color = c.inkMuted); inner() } },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
           Text("₹", style = mono(14.sp, FontWeight.Medium), color = c.inkFaint)
@@ -384,8 +384,8 @@ private fun LedgerRow(e: Entry, onOpen: (Entry) -> Unit, onSlate: (Long) -> Unit
     Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-          Text(e.payee, Modifier.weight(1f, fill = false), style = sans(16.sp, FontWeight.SemiBold, spacing = -0.005), color = c.inkBase, maxLines = 1, overflow = TextOverflow.Ellipsis)
-          e.item?.let { Text(it, Modifier.weight(1f, fill = false), style = sans(14.sp), color = c.inkMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+          Text(e.title, Modifier.weight(1f, fill = false), style = sans(16.sp, FontWeight.SemiBold, spacing = -0.005), color = c.inkBase, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          e.item?.takeIf { e.payee != null }?.let { Text(it, Modifier.weight(1f, fill = false), style = sans(14.sp), color = c.inkMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
           if (e.source == "wire") AutoBadge(e.auto)
         }
         // Cash moved to the wallet: shown, but it isn't spending.

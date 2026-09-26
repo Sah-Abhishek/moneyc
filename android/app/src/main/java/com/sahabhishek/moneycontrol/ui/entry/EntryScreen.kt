@@ -114,7 +114,7 @@ fun EntryScreen(shell: ShellState, nav: Nav, vm: EntryViewModel, isNew: Boolean)
       else -> Column(Modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, bottom = 64.dp)) {
         if (isNew || e == null) SectionHead("A new line", small = "Written by hand")
         else SectionHead(
-          e.payee,
+          e.title,
           small = "${dayMonthYear(e.occurredAt)} · ${clock(e.occurredAt)} · ${if (e.source == "wire") (if (e.auto) "filed automatically" else "from the wire") else "written by hand"}",
         )
         EntryForm(state, vm, nav, isNew)
@@ -175,7 +175,7 @@ private fun EntryForm(state: EntryState, vm: EntryViewModel, nav: Nav, isNew: Bo
         WebInput(
           f.payee,
           { v -> vm.edit { it.copy(payee = v) } },
-          placeholder = if (f.direction == "in") "Who paid you" else "Who you paid · e.g. Madan Stores",
+          placeholder = if (f.direction == "in") "Optional · who paid you" else "Optional · who you paid, e.g. Madan Stores",
           invalid = err["payee"] != null,
           maxLength = 120,
         )

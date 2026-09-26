@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { act } from "@/server/app";
 import { addEntry, addQuickEntry, deleteEntry, restoreEntry, updateEntry } from "@/server/services/entries";
 import { entryInput, idField, parseInput, quickEntryInput } from "@/server/validation";
+import { lineTitle } from "@/lib/types";
 import { z } from "zod";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -16,7 +17,7 @@ export async function addLineAction(form: FormData) {
     });
     const { entry, duplicate } = await addQuickEntry(ctx, input);
     refresh();
-    return { ok: true, data: { id: entry.id }, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
+    return { ok: true, data: { id: entry.id }, message: duplicate ? "That line was already added." : `Added ${lineTitle(entry)}.` };
   });
 }
 
@@ -26,7 +27,7 @@ export async function createEntryAction(form: FormData) {
     const key = parseInput(z.string().min(8).max(64), form.get("clientKey"));
     const { entry, duplicate } = await addEntry(ctx, input, key);
     refresh();
-    return { ok: true, data: { id: entry.id }, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
+    return { ok: true, data: { id: entry.id }, message: duplicate ? "That line was already added." : `Added ${lineTitle(entry)}.` };
   });
 }
 

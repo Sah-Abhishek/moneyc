@@ -33,7 +33,8 @@ export interface TagGroup {
 export interface Entry {
   id: number;
   occurredAt: string;
-  payee: string;
+  /** who was paid; null when only what it was for was written */
+  payee: string | null;
   amount: number;
   channel: string;
   ref: string | null;
@@ -76,3 +77,6 @@ export interface Rule {
 export type ActionResult<T = undefined> =
   | { ok: true; message?: string; data?: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+/** What a line is called: who was paid, else what it was for (every line has one or the other). */
+export const lineTitle = (e: { payee: string | null; item: string | null }) => e.payee ?? e.item ?? "Untitled line";

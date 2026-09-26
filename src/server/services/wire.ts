@@ -134,6 +134,7 @@ const STATUS_CONFLICT: Record<MailStatus, string> = {
 };
 
 export interface FileOptions {
+  /** the payee as edited ("" = cleared); absent = what the mail said */
   payee?: string | null;
   /** what the money was for ("Biscuits"); the payee stays who was paid */
   item?: string | null;
@@ -153,9 +154,12 @@ export interface FileOptions {
 export function fileMail(ctx: Ctx, mailId: number, opts: FileOptions, refs?: WireRefs): Promise<Entry> {
   return withTx(ctx, async (ctx) => {
     const slip = await getSlip(ctx, mailId, refs);
-    const payee = opts.payee?.trim() || slip.parsed.payee;
+    // Edited (a string, "" when cleared), the payee is what was typed; otherwise what the mail said.
+    const payee = (opts.payee != null ? opts.payee.trim() : slip.parsed.payee) || null;
+    const item = opts.item?.trim() || null;
     const amount = opts.amount ?? slip.parsed.amountPaise;
-    if (!payee) throw new UserError("Add the payee before filing — the mail didn't say who it was.", { payee: "Who was it?" });
+    if (!payee && !item)
+      throw new UserError("Say who was paid or what it was for — the mail didn't say who it was.", { payee: "Who was it, or what for?" });
     if (!amount) throw new UserError("Add the amount before filing — it couldn't be read from the mail.", { amount: "How much?" });
     if (!slip.parsed.direction) throw new UserError("The mail doesn't say whether money went out or came in. Add it by hand instead.");
     const atm = isCashWithdrawal(slip.parsed);
@@ -176,11 +180,11 @@ export function fileMail(ctx: Ctx, mailId: number, opts: FileOptions, refs?: Wir
         ctx.userId, slip.occurredAt, payee, slip.parsed.direction === "credit" ? amount : -amount,
         slip.parsed.channel === "Other" ? "Bank" : slip.parsed.channel, slip.parsed.ref,
         slip.parsed.account ? `${bankShort} ****${slip.parsed.account}` : null,
-        opts.item?.trim() || null, tagId, toWallet, opts.auto ?? false, mailId, now, now,
+        item, tagId, toWallet, opts.auto ?? false, mailId, now, now,
       ],
     );
     if (opts.personId) {
-      const note = slip.parsed.direction === "credit" ? `Repaid over ${slip.parsed.channel === "Other" ? "bank transfer" : slip.parsed.channel}` : `Paid ${payee} over ${slip.parsed.channel === "Other" ? "bank transfer" : slip.parsed.channel}`;
+      const note = slip.parsed.direction === "credit" ? `Repaid over ${slip.parsed.channel === "Other" ? "bank transfer" : slip.parsed.channel}` : `Paid ${payee ?? item} over ${slip.parsed.channel === "Other" ? "bank transfer" : slip.parsed.channel}`;
       await linkEntryToPerson(ctx, id, opts.personId, note);
     }
     return getEntry(ctx, id);

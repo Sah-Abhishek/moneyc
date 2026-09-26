@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { EntryForm } from "@/components/EntryForm";
 import { SlateLinker } from "@/components/SlateLinker";
 import { dayMonthYear, clock, wallClock, ymOf } from "@/lib/dates";
+import { lineTitle } from "@/lib/types";
 import { requireUser } from "@/server/app";
 import { NotFoundError } from "@/server/services/context";
 import { getEntry } from "@/server/services/entries";
@@ -30,7 +31,7 @@ export default async function EntryPage({ params }: PageProps<"/entries/[id]">) 
     <div className="page">
       <div className="section-head">
         <h2>
-          {entry.payee}
+          {lineTitle(entry)}
           <small>
             {dayMonthYear(entry.occurredAt)} · {clock(entry.occurredAt)} · {entry.source === "wire" ? (entry.auto ? "filed automatically" : "from the wire") : "written by hand"}
           </small>

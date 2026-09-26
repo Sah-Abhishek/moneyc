@@ -101,7 +101,8 @@ data class TagGroupsData(val groups: List<TagGroup> = emptyList(), val tags: Lis
 data class Entry(
   val id: Long,
   val occurredAt: String,
-  val payee: String,
+  /** who was paid; null when only what it was for was written */
+  val payee: String? = null,
   /** paise; negative = money out */
   val amount: Long,
   val channel: String,
@@ -125,6 +126,8 @@ data class Entry(
   val balance: Long = 0,
 ) {
   val isIncoming get() = amount > 0
+  /** What the line is called: who was paid, else what it was for. */
+  val title get() = payee ?: item ?: "Untitled line"
 }
 
 @Serializable

@@ -62,9 +62,13 @@ export const wallClockField = z
 /** cash from an ATM: "wallet" = I'll write down what I spend; "spent" = count it all as spent now */
 export const cashChoice = z.enum(["wallet", "spent"], { error: "Choose how this cash should count" });
 
+/** who was paid: optional, as long as what it was for is given instead */
+export const payeeField = z.preprocess((v) => v ?? undefined, optionalText("Payee", 120));
+const WHO_OR_WHAT = "Say who you paid or what it was for";
+
 export const entryInput = z
   .object({
-    payee: text("Payee", 120),
+    payee: payeeField,
     amount: amountField,
     direction: z.enum(["out", "in"], { error: "Choose money out or money in" }),
     occurredAt: wallClockField,
@@ -78,6 +82,7 @@ export const entryInput = z
     cash: z.preprocess((v) => (v === "" || v === null ? undefined : v), cashChoice.optional()),
   })
   .superRefine((e, ctx) => {
+    if (!e.payee && !e.item) ctx.addIssue({ code: "custom", path: ["payee"], message: WHO_OR_WHAT });
     if (e.channel === "ATM" && e.direction === "out" && !e.cash)
       ctx.addIssue({ code: "custom", path: ["cash"], message: "Choose how this cash should count" });
   })
@@ -94,7 +99,7 @@ export const entryInput = z
 export type EntryInput = z.infer<typeof entryInput>;
 
 export const quickEntryInput = z.object({
-  payee: text("Payee", 120),
+  payee: payeeField,
   item: itemField,
   /** a leading + means money in */
   amount: z
@@ -106,7 +111,7 @@ export const quickEntryInput = z.object({
   /** how it was paid; not ATM, whose cash needs the full form's question. Absent = Cash, as the line always was */
   channel: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.enum(QUICK_CHANNELS, { error: "Choose how it was paid" }).default("Cash")),
   clientKey: z.string().min(8).max(64),
-});
+}).refine((e) => e.payee || e.item, { path: ["payee"], message: WHO_OR_WHAT });
 
 export const tagInput = z.object({
   name: text("Name", 40),

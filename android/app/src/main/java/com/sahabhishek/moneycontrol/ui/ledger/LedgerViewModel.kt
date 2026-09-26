@@ -105,7 +105,7 @@ class LedgerViewModel(
     _state.update { it.copy(quick = q) }
   }
 
-  /** Rule 02: the blank line is always ready. Payee + amount, Enter, done. */
+  /** Rule 02: the blank line is always ready. Who or what for (either will do) + amount, Enter, done. */
   fun quickAdd() {
     val line = _state.value.quick
     if (line.pending) return

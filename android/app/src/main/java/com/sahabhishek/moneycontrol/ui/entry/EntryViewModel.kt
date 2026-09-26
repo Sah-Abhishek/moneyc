@@ -106,7 +106,7 @@ class EntryViewModel(
   private fun formOf(e: Entry) = LineForm(
     amount = rupeesExact(e.amount),
     direction = if (e.amount > 0) "in" else "out",
-    payee = e.payee,
+    payee = e.payee.orEmpty(),
     item = e.item.orEmpty(),
     occurredAt = e.occurredAt.take(16),
     channel = e.channel,

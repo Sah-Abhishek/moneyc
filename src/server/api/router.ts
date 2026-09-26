@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { wallClock, YM, ymOf } from "../../lib/dates.ts";
-import { LEDGER_FILTERS, type LedgerFilter } from "../../lib/types.ts";
+import { LEDGER_FILTERS, lineTitle, type LedgerFilter } from "../../lib/types.ts";
 import { exchangeServerAuthCode, GoogleAuthError, hasGmailScope, revokeGrant, saveGrant, type TokenSet } from "../auth/google.ts";
 import { createSession, destroySession, readSession } from "../auth/sessions.ts";
 import type { Db } from "../db/index.ts";
@@ -22,7 +22,7 @@ import { createTag, deleteTag, listTags, mergeTags, saveBudgets, tagUsage, updat
 import { closeAccount, getUser, setAutoFile, setMailSenders, updateSettings, upsertGoogleUser, type User } from "../services/users.ts";
 import { deleteMail, fileMail, ignoreMail, listSlips, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail, waitingCount, wireStats } from "../services/wire.ts";
 import {
-  amountField, cashChoice, entryInput, idField, itemField, mailSendersInput, parseBudgets, parseInput, personInput, promiseInput, quickEntryInput, ruleInput, settingsInput, settleInput, slateLineInput, tagGroupInput, tagInput,
+  amountField, cashChoice, entryInput, idField, itemField, mailSendersInput, parseBudgets, parseInput, payeeField, personInput, promiseInput, quickEntryInput, ruleInput, settingsInput, settleInput, slateLineInput, tagGroupInput, tagInput,
 } from "../validation.ts";
 
 // JSON API for the Android app: /api/v1/…
@@ -166,7 +166,7 @@ on("POST", "entries", async (c) => {
   const input = parseInput(entryInput, entryFields(c.body));
   const key = field("clientKey", z.string({ error: "Missing clientKey" }).min(8).max(64), c.body.clientKey);
   const { entry, duplicate } = await addEntry(c.ctx, input, key);
-  return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
+  return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${lineTitle(entry)}.` };
 });
 
 // The one-line form: "+2500" is money in.
@@ -175,7 +175,7 @@ on("POST", "entries/quick", async (c) => {
     payee: c.body.payee, item: c.body.item, amount: str(c.body.amount), tagId: c.body.tagId ?? "", channel: c.body.channel, clientKey: c.body.clientKey,
   });
   const { entry, duplicate } = await addQuickEntry(c.ctx, input);
-  return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${entry.payee}.` };
+  return { status: duplicate ? 200 : 201, data: entry, message: duplicate ? "That line was already added." : `Added ${lineTitle(entry)}.` };
 });
 
 on("PUT", "entries/:id", async (c) => {
@@ -232,14 +232,14 @@ on("POST", "wire/:id/file", async (c) => {
   const editing = c.body.payee !== undefined || c.body.amount !== undefined;
   const personId = c.body.personId == null || c.body.personId === "" ? null : field("personId", idField("Person"), c.body.personId);
   const entry = await fileMail(c.ctx, id(c, "Mail"), {
-    payee: editing ? field("payee", z.string().trim().min(1, "Who was it?").max(120), str(c.body.payee)) : null,
+    payee: editing ? field("payee", payeeField, str(c.body.payee)) ?? "" : undefined,
     amount: editing ? field("amount", amountField, str(c.body.amount)) : null,
     item: field("item", itemField, c.body.item),
     tagId: c.body.tagId == null || c.body.tagId === "" ? null : field("tagId", idField("Tag"), c.body.tagId),
     personId,
     cash: c.body.cash == null || c.body.cash === "" ? null : field("cash", cashChoice, c.body.cash),
   });
-  return { status: 201, data: entry, message: personId ? `Put ${entry.payee} on the slate.` : `Filed ${entry.payee}.` };
+  return { status: 201, data: entry, message: personId ? `Put ${lineTitle(entry)} on the slate.` : `Filed ${lineTitle(entry)}.` };
 });
 
 on("POST", "wire/:id/unfile", async (c) => {

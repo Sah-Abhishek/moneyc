@@ -120,10 +120,10 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               id="ef-payee"
               name="payee"
               className="input"
-              defaultValue={entry?.payee}
+              defaultValue={entry?.payee ?? ""}
               maxLength={120}
               autoComplete="off"
-              placeholder={direction === "in" ? "Who paid you" : "Who you paid · e.g. Madan Stores"}
+              placeholder={direction === "in" ? "Optional · who paid you" : "Optional · who you paid, e.g. Madan Stores"}
               aria-invalid={!!err("payee") || undefined}
               aria-describedby={describedBy("payee")}
             />

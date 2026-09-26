@@ -125,7 +125,7 @@ export async function merchants(ctx: Ctx, ym: string): Promise<Merchant[]> {
           GROUP BY tag_id ORDER BY COUNT(*) DESC, tag_id LIMIT 1) AS tag_id
        FROM (
          SELECT lower(payee) AS key, mode() WITHIN GROUP (ORDER BY payee) AS payee, SUM(-amount) AS total, COUNT(*) AS count
-         FROM entries WHERE ${SPEND} AND substr(occurred_at, 1, 7) = :ym
+         FROM entries WHERE ${SPEND} AND substr(occurred_at, 1, 7) = :ym AND payee IS NOT NULL
          GROUP BY lower(payee)
        ) m
        ORDER BY m.total DESC, m.key`,

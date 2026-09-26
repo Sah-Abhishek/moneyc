@@ -5,8 +5,8 @@ import { act, runSync } from "@/server/app";
 import { UserError } from "@/server/services/context";
 import { setAutoFile } from "@/server/services/users";
 import { deleteMail, fileMail, ignoreMail, markDuplicate, restoreFromDuplicate, restoreMail, unfileMail } from "@/server/services/wire";
-import { amountField, cashChoice, idField, itemField, parseInput } from "@/server/validation";
-import { z } from "zod";
+import { lineTitle } from "@/lib/types";
+import { amountField, cashChoice, idField, itemField, parseInput, payeeField } from "@/server/validation";
 
 const refresh = () => revalidatePath("/", "layout");
 
@@ -17,7 +17,7 @@ export async function fileSlipAction(form: FormData) {
     const personRaw = form.get("person");
     const editing = form.get("editing") === "1";
     const entry = await fileMail(ctx, mailId, {
-      payee: editing ? parseInput(z.string().trim().min(1, "Who was it?").max(120), form.get("payee")) : null,
+      payee: editing ? parseInput(payeeField, form.get("payee")) ?? "" : undefined,
       amount: editing ? parseInput(amountField, form.get("amount")) : null,
       item: parseInput(itemField, form.get("item")),
       tagId: tagRaw ? parseInput(idField("Tag"), tagRaw) : null,
@@ -25,7 +25,7 @@ export async function fileSlipAction(form: FormData) {
       cash: form.get("cash") ? parseInput(cashChoice, form.get("cash")) : null,
     });
     refresh();
-    return { ok: true, data: { id: entry.id }, message: personRaw ? `Put ${entry.payee} on the slate.` : `Filed ${entry.payee}.` };
+    return { ok: true, data: { id: entry.id }, message: personRaw ? `Put ${lineTitle(entry)} on the slate.` : `Filed ${lineTitle(entry)}.` };
   });
 }
 

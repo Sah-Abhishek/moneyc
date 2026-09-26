@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { clock, dayHeader, dayMonth, monthTitle, shiftYm } from "@/lib/dates";
 import { groupIndian, rupeesExact, signedAmount } from "@/lib/money";
-import type { Entry, LedgerFilter, Tag, TagGroup } from "@/lib/types";
+import { lineTitle, type Entry, type LedgerFilter, type Tag, type TagGroup } from "@/lib/types";
 import { maskRef } from "@/lib/wire/parse";
 import { PAGE_SIZE } from "@/server/services/entries";
 import { GroupPicker } from "./GroupPicker";
@@ -231,9 +231,9 @@ function Row({ e }: { e: Entry }) {
       <div className={s.payee}>
         <div className={s.payeeLine}>
           <Link href={`/entries/${e.id}`} className={s.payeeName}>
-            {e.payee}
+            {lineTitle(e)}
           </Link>
-          {e.item && <span className={s.item}>{e.item}</span>}
+          {e.payee && e.item && <span className={s.item}>{e.item}</span>}
           {e.source === "wire" && (
             <span className="auto-badge" title={e.auto ? "Filed automatically from your bank mail" : "Confirmed from your bank mail"}>
               <Image src="/icons/auto-dot.svg" alt="" width={4} height={4} />

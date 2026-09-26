@@ -141,7 +141,7 @@ fun WireSlipCard(
         Text(
           buildAnnotatedString {
             withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Looks like a line you already have:") }
-            append(" ${dup.payee}, ₹${rupeesExact(abs(dup.amount))} on ${dayMonth(dup.occurredAt)}.")
+            append(" ${dup.title}, ₹${rupeesExact(abs(dup.amount))} on ${dayMonth(dup.occurredAt)}.")
           },
           style = sans(13.sp, lineHeight = 1.45),
           color = c.inkBase,
@@ -165,7 +165,7 @@ fun WireSlipCard(
       Column {
         Field("Payee", first = true) {
           if (editing) {
-            SlipInput(payee, { payee = it }, fieldErrors["payee"] != null, "Payee")
+            SlipInput(payee, { payee = it }, fieldErrors["payee"] != null, "Payee", placeholder = "Optional if you say what for")
             FieldError(fieldErrors["payee"])
           } else Found(p.payee)
         }
