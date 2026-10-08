@@ -5,7 +5,7 @@ import { all, insertId, one, run, withTx } from "../db/index.ts";
 import type { EngineRule } from "../rules-engine.ts";
 import { evaluate } from "../rules-engine.ts";
 import { ConflictError, NotFoundError, nowUtc, UserError, type Ctx } from "./context.ts";
-import { findLikelyDuplicate, getEntry } from "./entries.ts";
+import { findLikelyDuplicate, getEntry, payeeHistory, type PayeeHistory } from "./entries.ts";
 import { engineRules } from "./rules.ts";
 import { linkEntryToPerson, listAccounts, matchPerson, type Account } from "./slate.ts";
 import { assertTag, tagMap } from "./tags.ts";
@@ -26,6 +26,8 @@ export interface WireSlip {
   /** when the payment happened: the time in the mail, else when it arrived */
   occurredAt: string;
   suggestion: { tag: Tag; basis: string } | null;
+  /** what this payee was paid for and tagged as before, for a mail still waiting */
+  history: PayeeHistory | null;
   /** a line already in the ledger that looks like this same payment */
   duplicateOf: Entry | null;
   /** an open slate account this payment probably belongs to */
@@ -54,18 +56,11 @@ export async function loadWireRefs(ctx: Ctx): Promise<WireRefs> {
   return { rules, tags, accounts };
 }
 
-export async function suggestTag(ctx: Ctx, payee: string | null, ruleTagId: number | null, tags: Map<number, Tag>): Promise<WireSlip["suggestion"]> {
+/** A standing rule's tag, else the tag this payee's past lines in the same direction carry most. */
+export function suggestTag(ruleTagId: number | null, tags: Map<number, Tag>, history: PayeeHistory): WireSlip["suggestion"] {
   if (ruleTagId != null && tags.get(ruleTagId)) return { tag: tags.get(ruleTagId)!, basis: "from a standing rule" };
-  if (!payee) return null;
-  const hist = await one<{ tag_id: number; n: number }>(
-    ctx.db,
-    `SELECT tag_id, COUNT(*) AS n FROM entries
-     WHERE user_id = ? AND lower(payee) = lower(?) AND tag_id IS NOT NULL AND deleted_at IS NULL
-     GROUP BY tag_id ORDER BY n DESC, tag_id LIMIT 1`,
-    [ctx.userId, payee],
-  );
-  const tag = hist && tags.get(hist.tag_id);
-  return tag ? { tag, basis: `from ${hist.n} past payment${hist.n === 1 ? "" : "s"}` } : null;
+  const top = history.tags[0];
+  return top ? { tag: top.tag, basis: `from ${top.uses} past payment${top.uses === 1 ? "" : "s"}` } : null;
 }
 
 async function toSlip(ctx: Ctx, r: MailRow, refs: WireRefs): Promise<WireSlip> {
@@ -73,15 +68,17 @@ async function toSlip(ctx: Ctx, r: MailRow, refs: WireRefs): Promise<WireSlip> {
   const occurredAt = resolveOccurredAt(parsed, r.received_at);
   const verdict = evaluate(refs.rules, { sender: r.sender, payee: parsed.payee, amount: parsed.amountPaise });
   const signed = parsed.amountPaise == null ? null : parsed.direction === "credit" ? parsed.amountPaise : -parsed.amountPaise;
-  const [suggestion, duplicateOf, person] = await Promise.all([
-    suggestTag(ctx, parsed.payee, verdict.tagId, refs.tags),
+  const direction = parsed.direction === "credit" ? "in" : parsed.direction === "debit" ? "out" : undefined;
+  const [history, duplicateOf, person] = await Promise.all([
+    payeeHistory(ctx, parsed.payee, { direction, tags: refs.tags }),
     r.status === "waiting" && signed != null ? findLikelyDuplicate(ctx, { amount: signed, occurredAt, ref: parsed.ref, cheque: parsed.channel === "Cheque" }) : null,
     r.status === "waiting" ? matchPerson(ctx, parsed.payee, refs.accounts) : null,
   ]);
+  const suggestion = suggestTag(verdict.tagId, refs.tags, history);
   const tagCertainty = suggestion ? (suggestion.basis.includes("rule") ? 1 : 0.95) : 0;
   return {
     id: r.id, bank: r.bank, sender: r.sender, subject: r.subject, body: r.body, receivedAt: r.received_at, status: r.status,
-    parsed, occurredAt, suggestion, duplicateOf, person, askFirst: verdict.ask,
+    parsed, occurredAt, suggestion, history: r.status === "waiting" ? history : null, duplicateOf, person, askFirst: verdict.ask,
     confidence: Math.round((parsed.confidence * 0.7 + tagCertainty * 0.3) * 100) / 100,
   };
 }

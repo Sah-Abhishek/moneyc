@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.sahabhishek.moneycontrol.R
 import com.sahabhishek.moneycontrol.data.Filing
 import com.sahabhishek.moneycontrol.data.api.ParsedMail
+import com.sahabhishek.moneycontrol.data.api.PayeeHistory
 import com.sahabhishek.moneycontrol.data.api.Rule
 import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.data.api.WireSlip
@@ -53,10 +55,12 @@ import com.sahabhishek.moneycontrol.ui.web.Btn
 import com.sahabhishek.moneycontrol.ui.web.BtnStyle
 import com.sahabhishek.moneycontrol.ui.web.ConfirmButton
 import com.sahabhishek.moneycontrol.ui.web.FieldError
+import com.sahabhishek.moneycontrol.ui.web.ItemChips
 import com.sahabhishek.moneycontrol.ui.web.Option
 import com.sahabhishek.moneycontrol.ui.web.Rule as RuleLine
 import com.sahabhishek.moneycontrol.ui.web.RuleHair
 import com.sahabhishek.moneycontrol.ui.web.Segmented
+import com.sahabhishek.moneycontrol.ui.web.TagChips
 import com.sahabhishek.moneycontrol.ui.web.WebSelect
 import com.sahabhishek.moneycontrol.ui.web.mix
 import com.sahabhishek.moneycontrol.util.clock12
@@ -68,6 +72,7 @@ import com.sahabhishek.moneycontrol.util.rupees
 import com.sahabhishek.moneycontrol.util.rupeesExact
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /** One parsed mail on the desk (WireSlip.tsx). What the parser read is highlighted; Edit turns it into inputs. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -82,6 +87,7 @@ fun WireSlipCard(
   onArchive: () -> Unit,
   onDelete: () -> Unit,
   onSameAs: (Long) -> Unit,
+  lookUp: suspend (payee: String, direction: String?) -> PayeeHistory?,
 ) {
   val c = Ledger.colors
   val p = slip.parsed
@@ -96,6 +102,18 @@ fun WireSlipCard(
   // Cash from an ATM: spending only if the owner won't write down what it buys. Always asked.
   val atm = p.channel == "ATM" && p.direction == "debit"
   var cash by rememberSaveable(slip.id) { mutableStateOf<String?>(null) }
+  // What this payee was paid for and tagged as before: the mail's payee comes
+  // with the slip; an edited one is looked up a moment after typing stops.
+  val who = if (editing) payee else p.payee.orEmpty()
+  val direction = when (p.direction) { "credit" -> "in"; "debit" -> "out"; else -> null }
+  val mailPayee = sameName(who, p.payee.orEmpty())
+  val history by produceState(if (mailPayee) slip.history else null, who, slip.history) {
+    value = if (mailPayee) slip.history else null
+    if (!mailPayee && who.isNotBlank()) {
+      delay(250)
+      value = lookUp(who, direction)
+    }
+  }
 
   val needsReview = slip.suggestion == null || slip.confidence < 0.8 || slip.askFirst || atm
   val tone = if (slip.confidence >= 0.9) c.credit else c.pending
@@ -173,6 +191,7 @@ fun WireSlipCard(
         Field("What for") {
           SlipInput(item, { item = it }, fieldErrors["item"] != null, "What for", placeholder = if (p.isCredit) "Optional · e.g. refund" else "What you bought · e.g. biscuits")
           FieldError(fieldErrors["item"])
+          ItemChips(history, item, { item = it })
         }
         Field("Amount") {
           if (editing) {
@@ -234,6 +253,7 @@ fun WireSlipCard(
           TagPicker(tags, tagId, credit) { tagId = it }
           slip.suggestion?.let { Text(it.basis, style = mono(9.sp, spacing = 0.03), color = c.inkFaint) }
         }
+        TagChips(history, tagId, { tagId = it }, skip = tagId)
       }
     }
     RuleHair()
@@ -370,3 +390,6 @@ fun describeAction(r: Rule): String = when (r.action) {
   "tag" -> "Tag ${r.tag?.name ?: "—"}"
   else -> "Ask me first"
 }
+
+/** The same payee, ignoring case and spacing. */
+private fun sameName(a: String, b: String) = a.trim().replace(Regex("\\s+"), " ").equals(b.trim().replace(Regex("\\s+"), " "), ignoreCase = true)

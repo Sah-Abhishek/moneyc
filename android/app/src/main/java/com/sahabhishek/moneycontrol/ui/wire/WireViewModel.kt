@@ -8,6 +8,7 @@ import com.sahabhishek.moneycontrol.data.Filing
 import com.sahabhishek.moneycontrol.data.Messenger
 import com.sahabhishek.moneycontrol.data.WireRepository
 import com.sahabhishek.moneycontrol.data.api.ApiResult
+import com.sahabhishek.moneycontrol.data.api.PayeeHistory
 import com.sahabhishek.moneycontrol.data.api.Rule
 import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.data.api.WireData
@@ -138,4 +139,8 @@ class WireViewModel(
       }
     }
   }
+
+  /** What [payee] was paid for and tagged as before, for a slip whose payee was edited; null when it can't be had. */
+  suspend fun payeeHistory(payee: String, direction: String?): PayeeHistory? =
+    book.cachedHistory(payee, direction) ?: (book.payeeHistory(payee, direction) as? ApiResult.Ok)?.data
 }

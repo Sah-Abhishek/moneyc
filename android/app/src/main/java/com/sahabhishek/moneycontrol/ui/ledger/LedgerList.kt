@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.sahabhishek.moneycontrol.R
 import com.sahabhishek.moneycontrol.data.api.EntriesPage
 import com.sahabhishek.moneycontrol.data.api.Entry
+import com.sahabhishek.moneycontrol.data.api.PayeeHistory
 import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.data.api.TagGroup
 import com.sahabhishek.moneycontrol.data.session.QUICK_CHANNELS
@@ -67,11 +68,13 @@ import com.sahabhishek.moneycontrol.ui.web.Chip
 import com.sahabhishek.moneycontrol.ui.web.Chips
 import com.sahabhishek.moneycontrol.ui.web.EmptyState
 import com.sahabhishek.moneycontrol.ui.web.Gutter
+import com.sahabhishek.moneycontrol.ui.web.ItemChips
 import com.sahabhishek.moneycontrol.ui.web.Option
 import com.sahabhishek.moneycontrol.ui.web.RuleHair
 import com.sahabhishek.moneycontrol.ui.web.SectionHead
 import com.sahabhishek.moneycontrol.ui.web.Stamp
 import com.sahabhishek.moneycontrol.ui.web.Swatch
+import com.sahabhishek.moneycontrol.ui.web.TagChips
 import com.sahabhishek.moneycontrol.ui.web.WebSelect
 import com.sahabhishek.moneycontrol.util.clock
 import com.sahabhishek.moneycontrol.util.dayHeader
@@ -102,7 +105,12 @@ data class QuickLine(
   val tagId: Long? = null,
   val pending: Boolean = false,
   val error: String? = null,
-)
+  /** what the payee was paid for and tagged as before, offered under the line */
+  val history: PayeeHistory? = null,
+) {
+  /** "+2500" is money in */
+  val direction get() = if (amount.trim().startsWith("+")) "in" else "out"
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -283,6 +291,12 @@ private fun QuickEntry(quick: QuickLine, tags: List<Tag>, onChange: (QuickLine) 
           enabled = !quick.pending,
           padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         )
+      }
+      if (quick.history?.isEmpty == false) {
+        Column(Modifier.fillMaxWidth().padding(start = 36.dp)) {
+          ItemChips(quick.history, quick.item, { onChange(quick.copy(item = it, error = null)) })
+          TagChips(quick.history, quick.tagId, { onChange(quick.copy(tagId = it, error = null)) })
+        }
       }
     }
     quick.error?.let { Text(it, Modifier.padding(start = 51.dp, top = 4.dp), style = mono(9.sp, spacing = 0.08), color = c.spend) }

@@ -12,7 +12,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 class BookChanges {
   private val flow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
   val changes: SharedFlow<Unit> = flow.asSharedFlow()
+  /** bumped on every write, so anything remembered from before can tell it's stale */
+  @Volatile var version = 0L
+    private set
   fun changed() {
+    version++
     flow.tryEmit(Unit)
   }
 }

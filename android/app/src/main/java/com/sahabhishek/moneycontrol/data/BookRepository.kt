@@ -7,6 +7,7 @@ import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.data.api.EntriesPage
 import com.sahabhishek.moneycontrol.data.api.Entry
 import com.sahabhishek.moneycontrol.data.api.MonthSummary
+import com.sahabhishek.moneycontrol.data.api.PayeeHistory
 import com.sahabhishek.moneycontrol.data.api.ReportData
 import com.sahabhishek.moneycontrol.data.api.RulesData
 import com.sahabhishek.moneycontrol.data.api.SlateData
@@ -51,6 +52,29 @@ class BookRepository(private val api: ApiClient, private val changes: BookChange
   suspend fun entry(id: Long) = api.get("entries/$id", Entry.serializer())
 
   suspend fun tags() = api.get("tags", TagsData.serializer())
+
+  // ─── a payee's past lines ─────────────────────────────────────────────────
+
+  /** Recent answers, so retyping a payee or flipping direction doesn't ask again. Dropped on any write. */
+  private class Seen(val at: Long, val version: Long, val history: PayeeHistory)
+  private val seen = object : LinkedHashMap<String, Seen>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Seen>?) = size > 50
+  }
+
+  private fun historyKey(payee: String, direction: String?) = "${direction ?: "any"}|${payee.trim().replace(Regex("\\s+"), " ").lowercase()}"
+
+  /** A remembered answer under a minute old with nothing written since, else null. */
+  fun cachedHistory(payee: String, direction: String?): PayeeHistory? = synchronized(seen) {
+    seen[historyKey(payee, direction)]?.takeIf { it.version == changes.version && System.currentTimeMillis() - it.at < 60_000 }?.history
+  }
+
+  /** What [payee] was paid for and tagged as before; [direction] out | in counts only lines that way. */
+  suspend fun payeeHistory(payee: String, direction: String?): ApiResult<PayeeHistory> {
+    val version = changes.version
+    return api.get("payees/history", PayeeHistory.serializer(), mapOf("payee" to payee.trim(), "direction" to direction)).also { r ->
+      if (r is ApiResult.Ok) synchronized(seen) { seen[historyKey(payee, direction)] = Seen(System.currentTimeMillis(), version, r.data) }
+    }
+  }
 
   // ─── tags ─────────────────────────────────────────────────────────────────
 

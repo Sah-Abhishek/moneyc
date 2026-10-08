@@ -1,0 +1,39 @@
+/* Chips for what a payee was paid for and tagged as before. */
+
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-right: 2px;
+}
+.item {
+  padding: 4px 9px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.tag {
+  cursor: pointer;
+}
+.tag:hover {
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+}
+.tag[aria-pressed="true"] {
+  outline: 1px solid var(--c);
+  outline-offset: 1px;
+}
+.item:focus-visible,
+.tag:focus-visible {
+  outline: 2px solid var(--ink-base);
+  outline-offset: 2px;
+}

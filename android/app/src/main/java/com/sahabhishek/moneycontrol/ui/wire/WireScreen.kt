@@ -162,6 +162,7 @@ private fun Desk(shell: ShellState, data: WireData, state: WireState, vm: WireVi
         onArchive = { vm.archive(slip.id) },
         onDelete = { vm.delete(slip.id) },
         onSameAs = { vm.sameAs(slip.id, it) },
+        lookUp = vm::payeeHistory,
       )
     }
     if (slips.isEmpty() && data.connection == Connection.Connected) {

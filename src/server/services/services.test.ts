@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { freshCtx, insertMail, key, secondUser, tagId } from "../test-helpers.ts";
 import { parseInput, entryInput, quickEntryInput, ruleInput, settleInput, tagGroupInput } from "../validation.ts";
 import { ConflictError, NotFoundError, UserError } from "./context.ts";
-import { addEntry, addQuickEntry, deleteEntry, findLikelyDuplicate, getEntry, listEntries, restoreEntry, updateEntry } from "./entries.ts";
+import { addEntry, addQuickEntry, deleteEntry, findLikelyDuplicate, getEntry, listEntries, payeeHistory, restoreEntry, updateEntry } from "./entries.ts";
 import { createRule, deleteRule, listRules, moveRule } from "./rules.ts";
 import { addSlateLine, createPerson, getAccount, listAccounts, matchPerson, remind, setPromise, settleUp, slateStats, deletePerson } from "./slate.ts";
 import { groupReports, monthSummary, monthlySpend, merchants } from "./summary.ts";
@@ -316,6 +316,50 @@ test("two payments of the same amount with different references are not duplicat
   await insertMail(ctx, HDFC, { gmailId: "c" }); // the same reference again (a re-sent alert)
   const again = (await listSlips(ctx, "waiting")).find((s) => s.parsed.ref === "626412345672");
   assert.ok(again?.duplicateOf);
+});
+
+test("a payee's history: what it was for and how it was tagged, most used first, ignoring case", async () => {
+  const ctx = await freshCtx();
+  const food = await tagId(ctx, "Food & delivery");
+  const shopping = await tagId(ctx, "Shopping");
+  const add = (over: Partial<Record<string, string>>) => addEntry(ctx, line({ payee: "Madan Stores", ...over }), key());
+  await add({ item: "Milk", tagId: String(food), occurredAt: "2026-09-01T08:00" });
+  await add({ payee: "MADAN STORES", item: "milk ", tagId: String(food), occurredAt: "2026-09-02T08:00" });
+  await add({ item: "Bread", tagId: String(shopping), occurredAt: "2026-09-03T08:00" });
+  await add({ item: "Eggs", occurredAt: "2026-09-04T08:00" });
+  await add({ item: "Soap", occurredAt: "2026-09-05T08:00" });
+  await add({ item: "Refund", direction: "in", occurredAt: "2026-09-06T08:00" });
+  const gone = await add({ item: "Deleted", occurredAt: "2026-09-07T08:00" });
+  await deleteEntry(ctx, gone.entry.id);
+  await addEntry(ctx, line({ payee: "Someone else", item: "Tea" }), key());
+
+  const out = await payeeHistory(ctx, "  madan   stores ", { direction: "out" });
+  // Milk twice (the latest spelling wins), then the most recent of the rest; three at most.
+  assert.deepEqual(out.items, [{ text: "milk", uses: 2 }, { text: "Soap", uses: 1 }, { text: "Eggs", uses: 1 }]);
+  assert.deepEqual(out.tags.map((t) => [t.tag.id, t.uses]), [[food, 2], [shopping, 1]]);
+  assert.deepEqual((await payeeHistory(ctx, "Madan Stores", { direction: "in" })).items, [{ text: "Refund", uses: 1 }]);
+  assert.equal((await payeeHistory(ctx, "Madan Stores")).items.length, 3);
+  assert.deepEqual(await payeeHistory(ctx, "   "), { items: [], tags: [] });
+  assert.deepEqual(await payeeHistory(ctx, "Nobody"), { items: [], tags: [] });
+
+  // Only the owner's book is read.
+  assert.deepEqual(await payeeHistory(await secondUser(ctx), "Madan Stores"), { items: [], tags: [] });
+});
+
+test("a waiting slip carries its payee's history, and the tag suggestion follows the money's direction", async () => {
+  const ctx = await freshCtx();
+  const food = await tagId(ctx, "Food & delivery");
+  await addEntry(ctx, line({ payee: "Vinod SI", item: "Chai", tagId: String(food) }), key());
+  await addEntry(ctx, line({ payee: "VINOD SI", item: "Repaid", direction: "in" }), key());
+  await insertMail(ctx, HDFC);
+  const [slip] = await listSlips(ctx, "waiting");
+  assert.deepEqual(slip.history?.items, [{ text: "Chai", uses: 1 }]);
+  assert.equal(slip.suggestion?.tag.id, food);
+  assert.equal(slip.suggestion?.basis, "from 1 past payment");
+
+  await fileMail(ctx, slip.id, { tagId: food, item: "Chai" });
+  const [decided] = await listSlips(ctx, "decided");
+  assert.equal(decided.history, null);
 });
 
 test("auto-file needs a known tag, a complete parse and no 'ask' rule", async () => {

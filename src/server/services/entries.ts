@@ -1,5 +1,5 @@
 import { wallClock } from "../../lib/dates.ts";
-import type { Entry, LedgerFilter } from "../../lib/types.ts";
+import type { Entry, LedgerFilter, Tag } from "../../lib/types.ts";
 import { all, insertId, one, run, withTx } from "../db/index.ts";
 import type { EntryInput } from "../validation.ts";
 import { ConflictError, NotFoundError, nowUtc, UserError, type Ctx } from "./context.ts";
@@ -72,6 +72,64 @@ export async function getEntry(ctx: Ctx, id: number): Promise<Entry> {
   const row = await one<EntryRow>(ctx.db, `${BOOK} SELECT * FROM book WHERE id = :id`, { user: ctx.userId, id });
   if (!row) throw new NotFoundError("That line no longer exists. It may have been deleted in another tab.");
   return (await mapRows(ctx, [row]))[0];
+}
+
+/** How many "what for"s and tags a payee's history offers. */
+export const HISTORY_LIMIT = 3;
+
+/** What a payee was paid for before, and how those lines were tagged: most used first, then most recent. */
+export interface PayeeHistory {
+  items: { text: string; uses: number }[];
+  tags: { tag: Tag; uses: number }[];
+}
+
+export const NO_HISTORY: PayeeHistory = { items: [], tags: [] };
+
+/**
+ * The user's own past lines to this payee (ignoring case), boiled down to the
+ * few "what for"s and tags worth offering again. `direction` keeps a refund
+ * from Amazon from suggesting what Amazon was paid for.
+ */
+export async function payeeHistory(
+  ctx: Ctx,
+  payee: string | null,
+  opts: { direction?: "in" | "out"; tags?: Map<number, Tag> } = {},
+): Promise<PayeeHistory> {
+  const name = payee?.trim().replace(/\s+/g, " ").slice(0, 120);
+  if (!name) return NO_HISTORY;
+  const sign = opts.direction === "in" ? "AND amount > 0" : opts.direction === "out" ? "AND amount < 0" : "";
+  const [rows, tags] = await Promise.all([
+    all<{ kind: "item" | "tag"; text: string | null; tag_id: number | null; uses: number; last: string }>(
+      ctx.db,
+      `WITH mine AS (
+         SELECT id, item, tag_id, occurred_at FROM entries
+         WHERE user_id = :user AND lower(payee) = lower(:payee) AND deleted_at IS NULL ${sign}
+       ),
+       items AS (
+         SELECT 'item' AS kind, (array_agg(btrim(item) ORDER BY occurred_at DESC, id DESC))[1] AS text, NULL::bigint AS tag_id,
+                COUNT(*) AS uses, MAX(occurred_at) AS last
+         FROM mine WHERE btrim(coalesce(item, '')) <> ''
+         GROUP BY lower(btrim(item)) ORDER BY uses DESC, last DESC LIMIT :limit
+       ),
+       tagged AS (
+         SELECT 'tag' AS kind, NULL::text AS text, tag_id, COUNT(*) AS uses, MAX(occurred_at) AS last
+         FROM mine WHERE tag_id IS NOT NULL
+         GROUP BY tag_id ORDER BY uses DESC, last DESC LIMIT :limit
+       )
+       SELECT * FROM items UNION ALL SELECT * FROM tagged`,
+      { user: ctx.userId, payee: name, limit: HISTORY_LIMIT },
+    ),
+    opts.tags ?? tagMap(ctx),
+  ]);
+  // UNION ALL keeps no order: rank again here.
+  const ranked = rows.sort((a, b) => b.uses - a.uses || (a.last < b.last ? 1 : a.last > b.last ? -1 : 0));
+  return {
+    items: ranked.filter((r) => r.kind === "item" && r.text).map((r) => ({ text: r.text!, uses: r.uses })),
+    tags: ranked.flatMap((r) => {
+      const tag = r.kind === "tag" && r.tag_id != null ? tags.get(r.tag_id) : undefined;
+      return tag ? [{ tag, uses: r.uses }] : [];
+    }),
+  };
 }
 
 /** Does this user have any lines at all? Distinguishes "new book" from "empty month". */

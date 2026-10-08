@@ -10,7 +10,7 @@ import { BANK_DOMAINS } from "../gmail/banks.ts";
 import { readSyncState, type SyncOutcome } from "../gmail/sync.ts";
 import { log } from "../log.ts";
 import { ConflictError, NotFoundError, UserError, type Ctx } from "../services/context.ts";
-import { addEntry, addQuickEntry, deleteEntry, getEntry, hasAnyEntries, listEntries, restoreEntry, updateEntry } from "../services/entries.ts";
+import { addEntry, addQuickEntry, deleteEntry, getEntry, hasAnyEntries, listEntries, payeeHistory, restoreEntry, updateEntry } from "../services/entries.ts";
 import { monthCsv } from "../services/export.ts";
 import { createRule, deleteRule, listRules, moveRule, updateRule } from "../services/rules.ts";
 import {
@@ -158,6 +158,12 @@ on("GET", "entries", async (c) => {
 });
 
 on("GET", "entries/:id", async (c) => ({ data: await getEntry(c.ctx, id(c, "Line")) }));
+
+// What a payee was paid for and tagged as before: suggestions while typing.
+on("GET", "payees/history", async (c) => {
+  const direction = c.query.get("direction");
+  return { data: await payeeHistory(c.ctx, c.query.get("payee")?.slice(0, 200) ?? null, { direction: direction === "in" || direction === "out" ? direction : undefined }) };
+});
 
 const entryFields = (b: Record<string, unknown>) =>
   ({ ...Object.fromEntries(["payee", "direction", "occurredAt", "channel", "tagId", "item", "note", "chequeNo", "cash"].map((k) => [k, b[k] ?? undefined])), amount: str(b.amount) });

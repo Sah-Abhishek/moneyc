@@ -14,6 +14,21 @@
   background: var(--paper-sunk);
   border: 1px dashed var(--ink-base);
 }
+/* What the payee was paid for and tagged as before: a row under the line. */
+.quick:has(.quickPast) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.quickPast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 18px;
+  flex-basis: calc(100% - 38px);
+  margin-left: 38px;
+}
+.quickPast > div {
+  margin-top: 0;
+}
 .quick:focus-within {
   border-style: solid;
 }
@@ -320,6 +335,7 @@
   }
   .quick .quickMode { order: 4; margin-left: 36px; }
   .quick .quickTag { order: 5; min-width: 0; max-width: 40vw; }
+  .quickPast { order: 7; flex-basis: calc(100% - 36px); margin-left: 36px; flex-direction: column; gap: 6px; }
   .quickSubmit {
     order: 6;
     margin-left: auto;

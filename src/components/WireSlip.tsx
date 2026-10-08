@@ -8,6 +8,7 @@ import { rupees, rupeesExact } from "@/lib/money";
 import { lineTitle, type Tag } from "@/lib/types";
 import { maskRef } from "@/lib/wire/parse";
 import type { WireSlip as Slip } from "@/server/services/wire";
+import { ItemChips, TagChips, usePayeeHistory } from "./PastUses";
 import { useToast } from "./ui/Toaster";
 import { callAction, useSubmit } from "./ui/useSubmit";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
@@ -28,6 +29,16 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
   // Cash from an ATM: spending only if the owner won't write down what it buys. Always asked.
   const atm = p.channel === "ATM" && p.direction === "debit";
   const [cash, setCash] = useState<"wallet" | "spent" | null>(null);
+  const [payee, setPayee] = useState(p.payee ?? "");
+  const [item, setItem] = useState("");
+  const [tagId, setTagId] = useState(slip.suggestion ? String(slip.suggestion.tag.id) : "");
+  // What this payee was paid for and tagged as before: the mail's payee comes
+  // with the slip; an edited one is looked up.
+  const who = editing ? payee : p.payee ?? "";
+  const history = usePayeeHistory(who, p.direction === "credit" ? "in" : p.direction === "debit" ? "out" : undefined, {
+    payee: p.payee ?? "",
+    history: slip.history,
+  });
 
   const { onSubmit, pending, error, fieldErrors } = useSubmit(fileSlipAction, {
     onSuccess: (r) =>
@@ -109,7 +120,7 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
           <Field label="Payee">
             {editing ? (
               <>
-                <input name="payee" defaultValue={p.payee ?? ""} className={s.edit} maxLength={120} placeholder="Optional if you say what for" aria-invalid={!!fieldErrors.payee || undefined} aria-label="Payee" />
+                <input name="payee" value={payee} onChange={(e) => setPayee(e.target.value)} className={s.edit} maxLength={120} placeholder="Optional if you say what for" aria-invalid={!!fieldErrors.payee || undefined} aria-label="Payee" />
                 <FieldError id={`payee-${slip.id}`} message={fieldErrors.payee} />
               </>
             ) : (
@@ -126,8 +137,11 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
               placeholder={credit ? "Optional · e.g. refund" : "What you bought · e.g. biscuits"}
               aria-label="What for"
               aria-invalid={!!fieldErrors.item || undefined}
+              value={item}
+              onChange={(e) => setItem(e.target.value)}
             />
             <FieldError id={`item-${slip.id}`} message={fieldErrors.item} />
+            <ItemChips history={history} value={item} payee={who} onPick={setItem} />
           </Field>
           <Field label="Amount">
             {editing ? (
@@ -210,8 +224,9 @@ export function WireSlip({ slip, tags, clock }: { slip: Slip; tags: Tag[]; clock
             <span className={s.fieldLabel} data-warn={!slip.suggestion || undefined}>
               {slip.suggestion ? "Suggested tag" : "Needs a tag"}
             </span>
-            <TagPicker tags={tags} suggested={slip.suggestion?.tag} credit={credit} />
+            <TagPicker tags={tags} value={tagId} onChange={setTagId} credit={credit} />
             {slip.suggestion && <span className={s.basis}>{slip.suggestion.basis}</span>}
+            <TagChips history={history} value={tagId} payee={who} onPick={setTagId} skip={tagId} />
           </div>
         )}
       </div>
@@ -285,8 +300,7 @@ function Found({ value }: { value: string | null }) {
   return value ? <mark className={s.found}>{value}</mark> : <span className={s.missing}>couldn&apos;t read this</span>;
 }
 
-function TagPicker({ tags, suggested, credit }: { tags: Tag[]; suggested?: Tag; credit: boolean }) {
-  const [id, setId] = useState(suggested ? String(suggested.id) : "");
+function TagPicker({ tags, value: id, onChange: setId, credit }: { tags: Tag[]; value: string; onChange: (id: string) => void; credit: boolean }) {
   const tag = tags.find((t) => String(t.id) === id);
   const ordered = [...tags].sort((a, b) => (a.kind === (credit ? "income" : "spend") ? -1 : 1) - (b.kind === (credit ? "income" : "spend") ? -1 : 1));
   return (

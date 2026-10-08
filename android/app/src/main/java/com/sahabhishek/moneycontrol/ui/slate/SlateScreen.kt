@@ -175,6 +175,7 @@ fun SlateScreen(shell: ShellState, nav: Nav, vm: SlateViewModel, wireVm: WireVie
                   error = err?.first, fieldErrors = err?.second.orEmpty(),
                   onFile = { wireVm.file(slip.id, it) }, onArchive = { wireVm.archive(slip.id) },
                   onDelete = { wireVm.delete(slip.id) }, onSameAs = { wireVm.sameAs(slip.id, it) },
+                  lookUp = wireVm::payeeHistory,
                 )
               }
             }

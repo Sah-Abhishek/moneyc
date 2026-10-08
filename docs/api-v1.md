@@ -77,6 +77,7 @@ project as the web client.
 | PUT | `entries/:id/slate` | `{ personId }` — move the line onto someone's slate |
 | DELETE | `entries/:id/slate` | make it an ordinary line again |
 | GET | `export?month=YYYY-MM` | CSV file (`text/csv`) |
+| GET | `payees/history?payee&direction` | what that payee (ignoring case) was paid for and tagged as before → `{ items: [{ text, uses }], tags: [{ tag, uses }] }`, up to 3 of each, most used then most recent first; `direction` (`out`\|`in`) counts only lines that way. No `payee` → both empty |
 
 `channel`: `UPI` `Card` `Cash` `Cheque` `NEFT` `IMPS` `RTGS` `ATM` `Bank`. An unknown or future `m` falls back to
 this month.
@@ -86,11 +87,12 @@ this month.
 - `cash` is required for money out over `ATM`: `wallet` = "I'll write down what I spend" (the line gets
   `toWallet: true`, counts neither as spending nor in the balance, and carries no tag), `spent` = count it all as spent.
 - Every line carries `toWallet` (boolean).
+- `payees/history` is for offering suggestions as someone types; nothing is filled in on its own.
 
 ### The wire
 | | | |
 |---|---|---|
-| GET | `wire` | `{ waiting, decided (last 30), stats, connection, sync, autoFile }` |
+| GET | `wire` | `{ waiting, decided (last 30), stats, connection, sync, autoFile }` — a waiting slip carries `history` (the same shape as `payees/history`, for the mail's payee and direction; `null` on decided slips) and `suggestion` (a standing rule's tag, else `history.tags[0]`) |
 | POST | `wire/sync` | `{ force? }` → `{ state: done\|busy\|too_soon, added, autoFiled, more }` |
 | POST | `wire/:id/file` | `{ tagId?, personId?, payee?, amount?, cash? }` — sending `payee`/`amount` means "edited"; `cash` (`wallet`\|`spent`) is required for an ATM withdrawal, which is never filed automatically |
 | POST | `wire/:id/unfile` | undo a filing |

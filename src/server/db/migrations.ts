@@ -226,4 +226,9 @@ export const MIGRATIONS: string[] = [
   -- not both. The app checks that at least one is there.
   ALTER TABLE entries ALTER COLUMN payee DROP NOT NULL;
   `,
+  /* 9 — a payee's past lines */ `
+  -- Typing who was paid offers what they were paid for before and how it was
+  -- tagged; the wire does the same for every waiting mail.
+  CREATE INDEX entries_user_payee ON entries(user_id, lower(payee)) WHERE deleted_at IS NULL;
+  `,
 ];

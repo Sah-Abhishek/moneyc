@@ -5,9 +5,11 @@ import androidx.lifecycle.viewModelScope
 import com.sahabhishek.moneycontrol.data.BookRepository
 import com.sahabhishek.moneycontrol.data.LineDraft
 import com.sahabhishek.moneycontrol.data.Messenger
+import com.sahabhishek.moneycontrol.data.PayeeLookup
 import com.sahabhishek.moneycontrol.data.api.Account
 import com.sahabhishek.moneycontrol.data.api.ApiResult
 import com.sahabhishek.moneycontrol.data.api.Entry
+import com.sahabhishek.moneycontrol.data.api.PayeeHistory
 import com.sahabhishek.moneycontrol.data.api.Tag
 import com.sahabhishek.moneycontrol.util.rupeesExact
 import java.util.UUID
@@ -53,6 +55,8 @@ data class EntryState(
   val fieldErrors: Map<String, String> = emptyMap(),
   val slatePending: Boolean = false,
   val slateError: String? = null,
+  /** what the payee was paid for and tagged as before, offered under the fields */
+  val history: PayeeHistory? = null,
 )
 
 /** "A new line" (id == null) or an existing line's page. */
@@ -65,6 +69,7 @@ class EntryViewModel(
   private val _state = MutableStateFlow(EntryState(form = LineForm(occurredAt = defaultWhen.take(16))))
   val state: StateFlow<EntryState> = _state.asStateFlow()
   private val clientKey = UUID.randomUUID().toString()
+  private val lookup = PayeeLookup(book, viewModelScope) { h -> _state.update { it.copy(history = h) } }
 
   /** One-off navigation: back to the ledger month after saving or deleting. */
   private val _done = MutableStateFlow<String?>(null)
@@ -100,6 +105,7 @@ class EntryViewModel(
           loading = false,
         )
       }
+      _state.value.form.let { f -> lookup.ask(f.payee, f.direction) }
     }
   }
 
@@ -117,7 +123,10 @@ class EntryViewModel(
     cash = if (e.channel == "ATM" && e.amount < 0) (if (e.toWallet) "wallet" else "spent") else null,
   )
 
-  fun edit(f: (LineForm) -> LineForm) = _state.update { it.copy(form = f(it.form)) }
+  fun edit(f: (LineForm) -> LineForm) {
+    _state.update { it.copy(form = f(it.form)) }
+    _state.value.form.let { lookup.ask(it.payee, it.direction) }
+  }
 
   fun save() {
     val s = _state.value

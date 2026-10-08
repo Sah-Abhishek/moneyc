@@ -475,3 +475,9 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+
+/* The tags this payee carried before: a row of their own under the picker. */
+.tagLine > [role="group"] {
+  flex-basis: 100%;
+  margin-top: 0;
+}

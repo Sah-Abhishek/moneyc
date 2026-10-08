@@ -7,6 +7,7 @@ import { createEntryAction, deleteEntryAction, restoreEntryAction, updateEntryAc
 import { unlinkEntryAction } from "@/app/actions/slate";
 import { rupeesExact } from "@/lib/money";
 import { CHANNELS, type Entry, type Tag } from "@/lib/types";
+import { ItemChips, TagChips, usePayeeHistory } from "./PastUses";
 import { ConfirmButton, FieldError, FormError } from "./ui/Confirm";
 import { Select } from "./ui/Select";
 import { useToast } from "./ui/Toaster";
@@ -24,6 +25,11 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
   const [amount, setAmount] = useState(entry ? rupeesExact(entry.amount) : "");
   const [channel, setChannel] = useState<string>(entry?.channel ?? "UPI");
   const [direction, setDirection] = useState<"out" | "in">(!entry || entry.amount < 0 ? "out" : "in");
+  const [payee, setPayee] = useState(entry?.payee ?? "");
+  const [item, setItem] = useState(entry?.item ?? "");
+  const [tagId, setTagId] = useState(entry?.tag?.id != null ? String(entry.tag.id) : "");
+  // What this payee was paid for and tagged as before, offered under the fields.
+  const history = usePayeeHistory(payee, direction);
   // An ATM line that already exists had its answer given; a new one must be asked.
   const [cash, setCash] = useState<"wallet" | "spent" | null>(entry?.channel === "ATM" && entry.amount < 0 ? (entry.toWallet ? "wallet" : "spent") : null);
   const cashOut = channel === "ATM" && direction === "out";
@@ -120,7 +126,8 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               id="ef-payee"
               name="payee"
               className="input"
-              defaultValue={entry?.payee ?? ""}
+              value={payee}
+              onChange={(e) => setPayee(e.target.value)}
               maxLength={120}
               autoComplete="off"
               placeholder={direction === "in" ? "Optional · who paid you" : "Optional · who you paid, e.g. Madan Stores"}
@@ -138,7 +145,8 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               id="ef-item"
               name="item"
               className="input"
-              defaultValue={entry?.item ?? ""}
+              value={item}
+              onChange={(e) => setItem(e.target.value)}
               maxLength={120}
               autoComplete="off"
               placeholder={direction === "in" ? "Optional · e.g. salary, refund" : "What you bought · e.g. biscuits"}
@@ -146,6 +154,15 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               aria-describedby={describedBy("item")}
             />
             <FieldError id="err-item" message={err("item")} />
+            <ItemChips
+              history={history}
+              value={item}
+              payee={payee}
+              onPick={(text) => {
+                setItem(text);
+                setDirty(true);
+              }}
+            />
           </div>
         </div>
 
@@ -278,8 +295,11 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
               <Select
                 id="ef-tag"
                 name="tagId"
-                defaultValue={entry?.tag?.id != null ? String(entry.tag.id) : ""}
-                onChange={() => setDirty(true)}
+                value={tagId}
+                onChange={(v) => {
+                  setTagId(v);
+                  setDirty(true);
+                }}
                 aria-describedby={describedBy("tagId")}
                 options={[
                   { value: "", label: "No tag" },
@@ -288,6 +308,15 @@ export function EntryForm({ entry, tags, defaultWhen, backHref }: { entry?: Entr
                 ]}
               />
               <FieldError id="err-tagId" message={err("tagId")} />
+              <TagChips
+                history={history}
+                value={tagId}
+                payee={payee}
+                onPick={(id) => {
+                  setTagId(id);
+                  setDirty(true);
+                }}
+              />
             </div>
           </div>
         )}

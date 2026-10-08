@@ -156,6 +156,21 @@ test("api: nobody can read or change another person's book", async () => {
   assert.equal((await call(d, "GET", `entries/${lineId}`, { token })).status, 200);
 });
 
+test("api: a payee's history for suggestions, counted one way only when asked", async () => {
+  const { token, d } = await signedIn();
+  for (const item of ["Milk", "Milk", "Bread"])
+    await call(d, "POST", "entries/quick", { token, body: { payee: "Madan Stores", item, amount: "40", clientKey: key() } });
+  await call(d, "POST", "entries/quick", { token, body: { payee: "madan stores", item: "Refund", amount: "+40", clientKey: key() } });
+
+  const out = await call(d, "GET", "payees/history?payee=MADAN%20STORES&direction=out", { token });
+  assert.equal(out.status, 200);
+  assert.deepEqual(out.json.data, { items: [{ text: "Milk", uses: 2 }, { text: "Bread", uses: 1 }], tags: [] });
+  assert.deepEqual((await call(d, "GET", "payees/history?payee=Madan%20Stores&direction=in", { token })).json.data.items, [{ text: "Refund", uses: 1 }]);
+  assert.equal((await call(d, "GET", "payees/history?payee=Madan%20Stores", { token })).json.data.items.length, 3);
+  assert.deepEqual((await call(d, "GET", "payees/history", { token })).json.data, { items: [], tags: [] });
+  assert.equal((await call(d, "GET", "payees/history?payee=Madan")).status, 401);
+});
+
 test("api: the wire — file, undo, archive, restore, delete", async () => {
   const { ctx, token, d } = await signedIn();
   const [a, b] = [await insertMail(ctx, HDFC), await insertMail(ctx, HDFC.replace("626412345672", "626400000001"))];

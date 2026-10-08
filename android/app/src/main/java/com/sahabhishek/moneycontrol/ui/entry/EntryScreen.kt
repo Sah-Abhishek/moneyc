@@ -72,6 +72,7 @@ import com.sahabhishek.moneycontrol.ui.web.FormError
 import com.sahabhishek.moneycontrol.ui.web.FormRow
 import com.sahabhishek.moneycontrol.ui.web.Gutter
 import com.sahabhishek.moneycontrol.ui.web.Hint
+import com.sahabhishek.moneycontrol.ui.web.ItemChips
 import com.sahabhishek.moneycontrol.ui.web.LoadingPage
 import com.sahabhishek.moneycontrol.ui.web.Option
 import com.sahabhishek.moneycontrol.ui.web.PageLede
@@ -79,6 +80,7 @@ import com.sahabhishek.moneycontrol.ui.web.Rule
 import com.sahabhishek.moneycontrol.ui.web.SectionHead
 import com.sahabhishek.moneycontrol.ui.web.Segmented
 import com.sahabhishek.moneycontrol.ui.web.Stamp
+import com.sahabhishek.moneycontrol.ui.web.TagChips
 import com.sahabhishek.moneycontrol.ui.web.WebInput
 import com.sahabhishek.moneycontrol.ui.web.WebSelect
 import com.sahabhishek.moneycontrol.util.clock
@@ -190,6 +192,7 @@ private fun EntryForm(state: EntryState, vm: EntryViewModel, nav: Nav, isNew: Bo
           maxLength = 120,
         )
         FieldError(err["item"])
+        ItemChips(state.history, f.item, { text -> vm.edit { it.copy(item = text) } })
       }
       FormRow("When") {
         DateTimeField(f.occurredAt, err["occurredAt"] != null) { v -> vm.edit { it.copy(occurredAt = v) } }
@@ -250,6 +253,7 @@ private fun EntryForm(state: EntryState, vm: EntryViewModel, nav: Nav, isNew: Bo
         FormRow("Tag") {
           WebSelect(tagOptions(state.tags), f.tagId, { t -> vm.edit { it.copy(tagId = t) } })
           FieldError(err["tagId"])
+          TagChips(state.history, f.tagId, { t -> vm.edit { it.copy(tagId = t) } })
         }
       }
       FormRow("Note") {

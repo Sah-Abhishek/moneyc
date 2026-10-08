@@ -193,6 +193,18 @@ data class ParsedMail(
 @Serializable
 data class Suggestion(val tag: Tag, val basis: String)
 
+/** GET payees/history — what a payee was paid for and tagged as before, most used first. */
+@Serializable
+data class PayeeHistory(val items: List<PastItem> = emptyList(), val tags: List<PastTag> = emptyList()) {
+  val isEmpty get() = items.isEmpty() && tags.isEmpty()
+}
+
+@Serializable
+data class PastItem(val text: String, val uses: Int)
+
+@Serializable
+data class PastTag(val tag: Tag, val uses: Int)
+
 /** A slate account, as much of it as the wire and line screens need. */
 @Serializable
 data class Account(
@@ -227,6 +239,8 @@ data class WireSlip(
   val parsed: ParsedMail = ParsedMail(),
   val occurredAt: String,
   val suggestion: Suggestion? = null,
+  /** what this payee was paid for and tagged as before; only on a waiting slip */
+  val history: PayeeHistory? = null,
   val duplicateOf: Entry? = null,
   val person: Account? = null,
   val askFirst: Boolean = false,

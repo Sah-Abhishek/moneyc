@@ -6,6 +6,7 @@ import com.sahabhishek.moneycontrol.data.BookChanges
 import com.sahabhishek.moneycontrol.data.BookRepository
 import com.sahabhishek.moneycontrol.data.session.DevicePrefs
 import com.sahabhishek.moneycontrol.data.Messenger
+import com.sahabhishek.moneycontrol.data.PayeeLookup
 import com.sahabhishek.moneycontrol.data.WireRepository
 import com.sahabhishek.moneycontrol.data.api.ApiResult
 import com.sahabhishek.moneycontrol.data.api.EntriesPage
@@ -46,6 +47,7 @@ class LedgerViewModel(
   val state: StateFlow<LedgerState> = _state.asStateFlow()
   private var clientKey = UUID.randomUUID().toString()
   private var loadJob: Job? = null
+  private val lookup = PayeeLookup(book, viewModelScope) { h -> _state.update { it.copy(quick = it.quick.copy(history = h)) } }
 
   init {
     viewModelScope.launch { changes.changes.collect { reload() } }
@@ -103,6 +105,7 @@ class LedgerViewModel(
   fun onQuickChange(q: QuickLine) {
     if (q.mode != _state.value.quick.mode) prefs.quickMode = q.mode
     _state.update { it.copy(quick = q) }
+    lookup.ask(q.payee, q.direction)
   }
 
   /** Rule 02: the blank line is always ready. Who or what for (either will do) + amount, Enter, done. */
@@ -116,6 +119,7 @@ class LedgerViewModel(
         is ApiResult.Ok -> {
           clientKey = UUID.randomUUID().toString()
           _state.update { it.copy(quick = QuickLine(mode = line.mode)) }
+          lookup.reset()
           val id = r.data.id
           messages.withUndo(r.message ?: "Line added.") {
             when (val del = book.delete(id)) {

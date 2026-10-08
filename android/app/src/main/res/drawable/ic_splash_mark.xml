@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The masthead's M as a vector, so the start screen stays sharp at the size
+  Android 12+ draws it (the launcher PNG blurs when scaled up that far).
+  Laid out on the 512 grid of public/pwa/maskable-512.png: the M is Instrument
+  Serif's outline, then the vermilion square and the double rule.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="@color/ink"
+        android:pathData="M234.63 332.21Q233.51 332.21 232.12 331.38Q230.73 330.54 230.17 327.76L188.11 157.03Q187.84 155.08 186.44 155.22Q185.05 155.36 185.05 157.31L179.48 311.05Q179.2 318.85 181.99 322.88Q184.77 326.92 191.73 328.04L195.36 328.59Q198.98 328.87 198.98 331.94Q198.98 335 194.8 335H154.97Q150.79 335 150.79 331.94Q150.79 328.87 154.41 328.59L158.03 328.04Q165.28 326.92 167.92 322.88Q170.57 318.85 170.85 311.05L176.42 152.85Q176.69 147 174.75 145.05Q172.8 143.1 166.39 141.99L159.98 140.87Q156.36 140.04 156.36 137.53Q156.36 134.47 160.54 134.47H193.96Q202.6 134.47 204.55 142.82L238.25 281.8Q238.8 283.75 240.06 283.75Q241.31 283.75 241.59 281.8L276.68 141.43Q278.35 134.47 285.59 134.47H318.46Q322.64 134.47 322.64 137.53Q322.64 140.04 319.02 140.87L312.61 141.99Q306.76 143.1 304.81 145.05Q302.86 147 303.14 152.85L308.71 316.62Q308.99 322.47 310.66 324.42Q312.33 326.37 318.18 327.48L324.59 328.59Q328.21 329.43 328.21 331.94Q328.21 335 324.03 335H273.62Q269.44 335 269.44 331.94Q269.44 329.43 273.06 328.59L279.47 327.48Q285.32 326.37 287.27 324.42Q289.22 322.47 288.94 316.62L284.2 157.31Q284.2 155.36 282.95 155.22Q281.7 155.08 281.14 156.75L238.8 327.76Q238.25 330.54 236.99 331.38Q235.74 332.21 234.63 332.21Z" />
+    <path
+        android:fillColor="#D8401C"
+        android:pathData="M356,308h28v28h-28z" />
+    <path
+        android:fillColor="@color/ink"
+        android:pathData="M128,356h256v10h-256z M128,373h256v3h-256z" />
+</vector>
